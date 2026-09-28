@@ -24,6 +24,29 @@
 go test ./...
 ```
 
+## Unity 側（通信テスト）
+
+- シーン: `PR_Kai/00_Scenes/Kai_NetworkTestScene`、リモート表示: `PR_Kai/01_Prefabs/RemotePlayer`
+- `Tools/Kai/Create Network Test Scene` で PrototypePlayerMovement からシーンとプレハブを作り直せる（既存があれば中止）
+- `Tools/Kai/Build Network Test Player` で `misoten2026/Builds/KaiNetworkTest/` にビルド（シーン一覧は変更しない）。その後 `./build.ps1 -OutDir ../misoten2026/Builds/KaiNetworkTest/Server` でサーバーを隣に置く
+  - ビルド時に Unity が HDRP 設定・QualitySettings などを自動アップグレードで書き換えることがある。今回の作業とは無関係なのでコミットしない
+- 起動引数
+
+| 引数 | 内容 |
+| --- | --- |
+| `-host` | Go サーバーを起動して 127.0.0.1 に入室する |
+| `-serverPath <path>` | `-host` で起動するサーバーの場所 |
+| `-connect <IP>` | 起動と同時にそのサーバーへ入室する |
+| `-name <名前>` | プレイヤー名 |
+| `-autoReady <人数>` | その人数が揃ったら自動で Ready にする |
+
+1台で試す例:
+
+```powershell
+./KaiNetworkTest.exe -host -name Host -autoReady 2 -screen-fullscreen 0 -screen-width 720 -screen-height 405
+./KaiNetworkTest.exe -connect 127.0.0.1 -name Client -autoReady 2 -screen-fullscreen 0 -screen-width 720 -screen-height 405
+```
+
 ## 構成
 
 | パス | 内容 |
