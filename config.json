@@ -1,0 +1,15 @@
+{
+  "serverName": "misoten2026",
+  "tcpPort": 7777,
+  "udpPort": 7778,
+  "discoveryPort": 7779,
+  "announceIntervalMs": 1000,
+  "tickRate": 30,
+  "maxPlayers": 4,
+  "pingTimeoutMs": 3000,
+  "reconnectWindowSec": 30,
+  "startDelayTicks": 15,
+  "stageName": "Kai_NetworkTestScene",
+  "logDir": "logs",
+  "logLevel": "info"
+}
