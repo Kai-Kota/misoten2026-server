@@ -86,6 +86,10 @@ go test ./...
 | 0x0201 | LoadStage | S→C | `{stageName}` |
 | 0x0202 | LoadComplete | C→S | `{}` |
 | 0x0203 | GameStart | S→C | `{startTick}` |
+| 0x0301 | Fire | C→S | `{origin, velocity}` 自分の弾を撃ったとき |
+| 0x0302 | FireNotify | S→C | `{playerId, origin, velocity}` 撃った本人以外へ中継 |
+| 0x0303 | BossDamage | C→S | `{amount}` 自分の攻撃でボスに与えたダメージ |
+| 0x0304 | BossState | S→C | `{totalDamage}` このゲームの累計ダメージ。開始時・変化時・再接続時に送る |
 
 ### UDP
 
@@ -93,13 +97,15 @@ go test ./...
 | --- | --- | --- | --- |
 | 0x01 | UdpBind | C→S | なし。UdpBindAck が届くまで200ms間隔で再送 |
 | 0x02 | UdpBindAck | S→C | なし |
-| 0x10 | PlayerState | C→S | `{tick, pos:{x,y,z}, yaw, pitch, vel:{x,y,z}, animState, flags}` |
+| 0x10 | PlayerState | C→S | `{tick, pos:{x,y,z}, yaw, pitch, vel:{x,y,z}, animState, flags, health, maxHealth}` |
 | 0x20 | WorldSnapshot | S→C | `{serverTick, players:[{playerId, tick, pos, yaw, pitch, vel, animState, flags}]}` |
 | 0x30 | ServerAnnounce | S→全体 | `{serverName, version, tcpPort, udpPort, playerCount, maxPlayers, phase}` |
 
 - `tick` はクライアントが推定したサーバーtick（送信時点）。他プレイヤーの補間はこの tick を時間軸にする。
 - `yaw`・`pitch` は度。pitch は Unity と同じく下向きが正。
 - `animState`: 0=Idle 1=Move 2=Dead、`flags`: bit0=接地 bit1=死亡
+- HP は各自のクライアントが正（自分の Status を送る）。ボスの HP は、各クライアントが自分の攻撃で減った分を BossDamage で報告し、届いた累計ダメージまで減らす（減らす方向にだけ合わせる）
+- 他プレイヤーの弾は表示専用（ダメージ0）。ダメージは撃った本人のクライアントで判定する
 
 ### 流れ
 
