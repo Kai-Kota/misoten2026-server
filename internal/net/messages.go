@@ -13,6 +13,10 @@ const (
 	MsgLoadStage    uint16 = 0x0201
 	MsgLoadComplete uint16 = 0x0202
 	MsgGameStart    uint16 = 0x0203
+	MsgFire         uint16 = 0x0301
+	MsgFireNotify   uint16 = 0x0302
+	MsgBossDamage   uint16 = 0x0303
+	MsgBossState    uint16 = 0x0304
 )
 
 // UDP のメッセージ種別（uint8）。
@@ -119,6 +123,30 @@ type PlayerState struct {
 	Vel       Vector3 `json:"vel"`
 	AnimState int     `json:"animState"`
 	Flags     int     `json:"flags"`
+	Health    int     `json:"health"`
+	MaxHealth int     `json:"maxHealth"`
+}
+
+// Fire は自分の弾を撃ったときに送る。サーバーは撃った本人以外へ FireNotify として中継する。
+type Fire struct {
+	Origin   Vector3 `json:"origin"`
+	Velocity Vector3 `json:"velocity"`
+}
+
+type FireNotify struct {
+	PlayerID int     `json:"playerId"`
+	Origin   Vector3 `json:"origin"`
+	Velocity Vector3 `json:"velocity"`
+}
+
+// BossDamage は自分の攻撃でボスに与えたダメージ量。
+type BossDamage struct {
+	Amount int `json:"amount"`
+}
+
+// BossState はこのゲームでボスが受けた累計ダメージ。各クライアントは「最大HP - 累計」までHPを減らす。
+type BossState struct {
+	TotalDamage int `json:"totalDamage"`
 }
 
 type SnapshotPlayer struct {

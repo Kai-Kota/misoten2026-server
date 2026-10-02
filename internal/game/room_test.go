@@ -333,6 +333,8 @@ func TestSnapshotFitsInOnePacket(t *testing.T) {
 			Vel:       gnet.Vector3{X: -123.456789, Y: -123.456789, Z: -123.456789},
 			AnimState: 255,
 			Flags:     255,
+			Health:    100000,
+			MaxHealth: 100000,
 		}})
 	}
 	payload, err := json.Marshal(snapshot)
@@ -350,5 +352,114 @@ func TestSanitizeName(t *testing.T) {
 	}
 	if got := sanitizeName("あいうえおかきくけこさしすせそたちつ", 0); got != "あいうえおかきくけこさしすせそた" {
 		t.Fatalf("got %q", got)
+	}
+}
+
+// startGame は2人入室させてゲームを開始した状態にする。
+func startGame(f *roomFixture) (*fakeConn, gnet.JoinAccepted, *fakeConn, gnet.JoinAccepted) {
+	f.t.Helper()
+	first, a := f.join("A")
+	second, b := f.join("B")
+	for _, conn := range []*fakeConn{first, second} {
+		f.send(conn, gnet.MsgSetReady, gnet.SetReady{IsReady: true})
+	}
+	for _, conn := range []*fakeConn{first, second} {
+		f.send(conn, gnet.MsgLoadComplete, gnet.LoadComplete{})
+	}
+	if f.room.phase != gnet.PhaseInGame {
+		f.t.Fatal("game did not start")
+	}
+	return first, a, second, b
+}
+
+func countSent(conn *fakeConn, msgType uint16) int {
+	count := 0
+	for _, frame := range conn.sent {
+		if frame.msgType == msgType {
+			count++
+		}
+	}
+	return count
+}
+
+func TestFireIsRelayedToOthersOnly(t *testing.T) {
+	f := newFixture(t)
+	first, _, second, _ := startGame(f)
+	fire := gnet.Fire{Origin: gnet.Vector3{X: 1, Y: 1.5, Z: 2}, Velocity: gnet.Vector3{Z: 12}}
+	f.send(first, gnet.MsgFire, fire)
+
+	var notify gnet.FireNotify
+	if !second.last(t, gnet.MsgFireNotify, &notify) {
+		t.Fatal("FireNotify was not relayed")
+	}
+	if notify.PlayerID != 0 || notify.Origin != fire.Origin || notify.Velocity != fire.Velocity {
+		t.Fatalf("notify = %+v", notify)
+	}
+	if countSent(first, gnet.MsgFireNotify) != 0 {
+		t.Fatal("FireNotify was echoed back to the shooter")
+	}
+}
+
+func TestFireIgnoredOutsideGame(t *testing.T) {
+	f := newFixture(t)
+	first, _ := f.join("A")
+	second, _ := f.join("B")
+	f.send(first, gnet.MsgFire, gnet.Fire{})
+	if countSent(second, gnet.MsgFireNotify) != 0 {
+		t.Fatal("FireNotify relayed in lobby")
+	}
+}
+
+func TestBossDamageAccumulates(t *testing.T) {
+	f := newFixture(t)
+	first, _, second, _ := startGame(f)
+	var state gnet.BossState
+	if !second.last(t, gnet.MsgBossState, &state) || state.TotalDamage != 0 {
+		t.Fatalf("initial boss state = %+v", state)
+	}
+
+	f.send(first, gnet.MsgBossDamage, gnet.BossDamage{Amount: 10})
+	f.send(second, gnet.MsgBossDamage, gnet.BossDamage{Amount: 25})
+	for _, conn := range []*fakeConn{first, second} {
+		if !conn.last(t, gnet.MsgBossState, &state) || state.TotalDamage != 35 {
+			t.Fatalf("boss state = %+v, want 35", state)
+		}
+	}
+
+	// 不正な値は数えない。
+	f.send(first, gnet.MsgBossDamage, gnet.BossDamage{Amount: 0})
+	f.send(first, gnet.MsgBossDamage, gnet.BossDamage{Amount: -5})
+	f.send(first, gnet.MsgBossDamage, gnet.BossDamage{Amount: maxBossDamagePerReport + 1})
+	if f.room.bossTotalDamage != 35 {
+		t.Fatalf("total = %d, want 35", f.room.bossTotalDamage)
+	}
+}
+
+func TestBossStateResentOnReconnectAndResetAfterGame(t *testing.T) {
+	f := newFixture(t)
+	first, a, second, _ := startGame(f)
+	f.send(second, gnet.MsgBossDamage, gnet.BossDamage{Amount: 40})
+
+	f.room.HandleClosed(first, f.now)
+	reconnected := &fakeConn{id: 100}
+	f.send(reconnected, gnet.MsgReconnect, gnet.Reconnect{Version: int(gnet.ProtocolVersion), PlayerID: 0, UDPToken: a.UDPToken})
+	var state gnet.BossState
+	if !reconnected.last(t, gnet.MsgBossState, &state) || state.TotalDamage != 40 {
+		t.Fatalf("boss state after reconnect = %+v", state)
+	}
+
+	f.send(reconnected, gnet.MsgLeave, gnet.Leave{})
+	f.send(second, gnet.MsgLeave, gnet.Leave{})
+	if f.room.phase != gnet.PhaseLobby || f.room.bossTotalDamage != 0 {
+		t.Fatalf("phase = %d, total = %d", f.room.phase, f.room.bossTotalDamage)
+	}
+}
+
+func TestBossDamageIgnoredOutsideGame(t *testing.T) {
+	f := newFixture(t)
+	conn, _ := f.join("A")
+	f.send(conn, gnet.MsgBossDamage, gnet.BossDamage{Amount: 10})
+	if f.room.bossTotalDamage != 0 {
+		t.Fatal("boss damage counted in lobby")
 	}
 }

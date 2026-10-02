@@ -21,6 +21,9 @@ const MaxPlayerSlots = 4
 
 const maxPlayerNameLength = 16
 
+// 1回の BossDamage で受け付ける上限（壊れた値や不正な値を弾く）。
+const maxBossDamagePerReport = 10000
+
 // RoomConfig はゲームループの設定。
 type RoomConfig struct {
 	TickRate        int
@@ -47,6 +50,8 @@ type Room struct {
 	phase       int
 	startTime   time.Time
 	startTick   uint32
+	// このゲームでボスが受けた累計ダメージ。
+	bossTotalDamage int
 
 	// Discovery の goroutine から読むための値。
 	announcedPlayerCount atomic.Int32
@@ -145,6 +150,29 @@ func (r *Room) HandleFrame(conn Conn, frame gnet.Frame, now time.Time) {
 		player.IsLoaded = true
 		r.logger.Info("load complete", "player", player.ID)
 		r.tryStartGame(now)
+	case gnet.MsgFire:
+		var fire gnet.Fire
+		if player == nil || r.phase != gnet.PhaseInGame || !r.decode(frame, &fire) {
+			return
+		}
+		notify := gnet.FireNotify{PlayerID: player.ID, Origin: fire.Origin, Velocity: fire.Velocity}
+		for _, other := range r.players {
+			if other != nil && other != player && other.IsConnected() {
+				sendJSON(other.Conn, gnet.MsgFireNotify, notify)
+			}
+		}
+	case gnet.MsgBossDamage:
+		var damage gnet.BossDamage
+		if player == nil || r.phase != gnet.PhaseInGame || !r.decode(frame, &damage) {
+			return
+		}
+		if damage.Amount <= 0 || damage.Amount > maxBossDamagePerReport {
+			r.logger.Warn("invalid boss damage", "player", player.ID, "amount", damage.Amount)
+			return
+		}
+		r.bossTotalDamage += damage.Amount
+		r.logger.Info("boss damaged", "player", player.ID, "amount", damage.Amount, "total", r.bossTotalDamage)
+		r.broadcastTCP(gnet.MsgBossState, gnet.BossState{TotalDamage: r.bossTotalDamage})
 	case gnet.MsgLeave:
 		if player == nil {
 			return
@@ -232,6 +260,7 @@ func (r *Room) handleReconnect(conn Conn, request gnet.Reconnect, now time.Time)
 		sendJSON(conn, gnet.MsgLoadStage, gnet.LoadStage{StageName: r.config.StageName})
 	case gnet.PhaseInGame:
 		sendJSON(conn, gnet.MsgGameStart, gnet.GameStart{StartTick: r.startTick})
+		sendJSON(conn, gnet.MsgBossState, gnet.BossState{TotalDamage: r.bossTotalDamage})
 	}
 }
 
@@ -314,6 +343,7 @@ func (r *Room) afterMembershipChanged(now time.Time) {
 	if r.phase != gnet.PhaseLobby && r.countPlayers(false) == 0 {
 		r.logger.Info("room is empty; back to lobby")
 		r.phase = gnet.PhaseLobby
+		r.bossTotalDamage = 0
 	}
 	r.broadcastLobby()
 	r.tryBeginLoading()
@@ -353,8 +383,10 @@ func (r *Room) tryStartGame(now time.Time) {
 	}
 	r.phase = gnet.PhaseInGame
 	r.startTick = r.TickAt(now) + uint32(r.config.StartDelayTicks)
+	r.bossTotalDamage = 0
 	r.logger.Info("game start", "startTick", r.startTick)
 	r.broadcastTCP(gnet.MsgGameStart, gnet.GameStart{StartTick: r.startTick})
+	r.broadcastTCP(gnet.MsgBossState, gnet.BossState{TotalDamage: r.bossTotalDamage})
 	r.broadcastLobby()
 }
 
