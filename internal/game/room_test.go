@@ -46,18 +46,19 @@ func (c *fakeConn) last(t *testing.T, msgType uint16, target any) bool {
 }
 
 type sentPacket struct {
-	addr   netip.AddrPort
-	header gnet.UDPHeader
+	addr    netip.AddrPort
+	header  gnet.UDPHeader
+	payload []byte
 }
 
 type fakeUDP struct{ sent []sentPacket }
 
 func (u *fakeUDP) SendTo(addr netip.AddrPort, packet []byte) error {
-	header, _, err := gnet.DecodePacket(packet)
+	header, payload, err := gnet.DecodePacket(packet)
 	if err != nil {
 		return err
 	}
-	u.sent = append(u.sent, sentPacket{addr, header})
+	u.sent = append(u.sent, sentPacket{addr, header, append([]byte(nil), payload...)})
 	return nil
 }
 
@@ -317,7 +318,8 @@ func TestUDPBindAndSnapshot(t *testing.T) {
 	}
 	f.room.phase = gnet.PhaseInGame
 	f.advance(time.Second / 30)
-	if len(f.udp.sent) != 1 || f.udp.sent[0].header.MsgType != gnet.MsgWorldSnapshot {
+	if len(f.udp.sent) != 2 || f.udp.sent[0].header.MsgType != gnet.MsgWorldSnapshot ||
+		f.udp.sent[1].header.MsgType != gnet.MsgEnemySnapshot {
 		t.Fatalf("snapshot packets = %+v", f.udp.sent)
 	}
 }

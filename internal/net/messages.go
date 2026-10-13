@@ -20,6 +20,7 @@ const (
 	MsgReviveStart  uint16 = 0x0401
 	MsgReviveStop   uint16 = 0x0402
 	MsgRevived      uint16 = 0x0403
+	MsgEnemyAction  uint16 = 0x0501
 )
 
 // UDP のメッセージ種別（uint8）。
@@ -27,7 +28,9 @@ const (
 	MsgUDPBind        uint8 = 0x01
 	MsgUDPBindAck     uint8 = 0x02
 	MsgPlayerState    uint8 = 0x10
+	MsgEnemyState     uint8 = 0x11
 	MsgWorldSnapshot  uint8 = 0x20
+	MsgEnemySnapshot  uint8 = 0x21
 	MsgServerAnnounce uint8 = 0x30
 )
 
@@ -166,6 +169,39 @@ type ReviveStop struct{}
 type Revived struct {
 	ReviverID int `json:"reviverId"`
 	TargetID  int `json:"targetId"`
+}
+
+// EnemyState は敵を動かす担当のクライアントが毎 tick 送る、全部の敵の状態。
+// 担当はサーバーが決め（EnemySnapshot.enemyOwnerId）、担当以外から届いたものは捨てる。
+type EnemyState struct {
+	Enemies []EnemySample `json:"enemies"`
+}
+
+// EnemySample は敵1体の状態。tick は担当のクライアントが推定したサーバーtick。
+type EnemySample struct {
+	EnemyID    int     `json:"enemyId"`
+	Tick       uint32  `json:"tick"`
+	Pos        Vector3 `json:"pos"`
+	Yaw        float32 `json:"yaw"`
+	Vel        Vector3 `json:"vel"`
+	ActionType int     `json:"actionType"`
+}
+
+// EnemySnapshot はサーバーが毎 tick 全員へ送る。WorldSnapshot に入れると1パケットに収まらないため分けている。
+// enemyOwnerId が自分なら、そのクライアントが敵の AI を動かす。誰もいなければ -1。
+type EnemySnapshot struct {
+	ServerTick   uint32        `json:"serverTick"`
+	EnemyOwnerID int           `json:"enemyOwnerId"`
+	Enemies      []EnemySample `json:"enemies"`
+}
+
+// EnemyAction は担当のクライアントで敵が攻撃などの行動を始めたときに送る。
+// サーバーは担当以外の全員へ中継し、受け取ったクライアントは同じ位置・向きから同じ行動を再生する。
+type EnemyAction struct {
+	EnemyID    int     `json:"enemyId"`
+	ActionType int     `json:"actionType"`
+	Pos        Vector3 `json:"pos"`
+	Yaw        float32 `json:"yaw"`
 }
 
 type SnapshotPlayer struct {

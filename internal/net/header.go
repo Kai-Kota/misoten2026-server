@@ -10,7 +10,7 @@ const (
 	// UDPMagic はこのゲームのパケットであることを示す値。
 	UDPMagic uint16 = 0xB055
 	// ProtocolVersion は UDP ヘッダと JoinRequest で使うプロトコルのバージョン。
-	ProtocolVersion uint8 = 2
+	ProtocolVersion uint8 = 3
 	// UDPHeaderSize は UDP ヘッダのバイト数。
 	UDPHeaderSize = 12
 	// MaxUDPPacketSize は1パケットの上限（ヘッダ込み）。

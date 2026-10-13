@@ -51,6 +51,18 @@ go test ./...
 ./KaiNetworkTest.exe -connect 127.0.0.1 -name Client -autoReady 2 -screen-fullscreen 0 -screen-width 720 -screen-height 405
 ```
 
+## Unity 側（プロトタイプ）
+
+- `Tools/Kai/Setup Prototype Online` で `00_Production/00_Scenes/00_Prototype/Prototype.unity` に通信を組み込む。リモート表示 `PR_Kai/01_Prefabs/RemotePlayer_Folia` も自分のプレイヤーから作る（あれば上書き）
+  - シーンを作り直したときは、もう一度実行する（NetworkManager が既にあれば中止）
+  - Play するとロビーが出る。`Host` で始めると、Ready が揃うまでプレイヤーは動かない
+- `Tools/Kai/Build Prototype Online Player` で `misoten2026/Builds/PrototypeOnline/` にビルド。サーバーは `./build.ps1 -OutDir ../misoten2026/Builds/PrototypeOnline/Server`
+- 同期するもの: プレイヤーの移動・攻撃・ワイヤー・HP・死亡・蘇生、弾の表示、敵の位置・攻撃・HP
+- 同期しないもの: 武器の合体（各クライアントで勝手に合体する。他のプレイヤーの弾は合体前の見た目で表示される）
+- 敵: サーバーが決めた担当（接続中で一番小さい playerId）のクライアントだけが AI を動かす。担当は倒れていない一番近いプレイヤーを狙う
+  - 担当以外は位置を補間して表示し、攻撃は担当と同じ位置・向きから再生する。予告の場所は全員同じで、当たり判定は各クライアントが自分のプレイヤーにだけ行う
+  - 担当が切断したら次の人が引き継ぐ（その時点の位置から AI を最初の行動で動かし直す）
+
 ## 構成
 
 | パス | 内容 |
@@ -66,11 +78,11 @@ go test ./...
 | ポート | 種類 | 用途 |
 | --- | --- | --- |
 | 7777 | TCP (NoDelay) | 入室・ロビー・開始・終了など落とせないイベント |
-| 7778 | UDP | PlayerState（C→S、30Hz）と WorldSnapshot（S→C、30Hz） |
+| 7778 | UDP | PlayerState・EnemyState（C→S、30Hz）と WorldSnapshot・EnemySnapshot（S→C、30Hz） |
 | 7779 | UDP ブロードキャスト | ServerAnnounce（1秒ごと） |
 
 - TCP フレーム: `uint32 length | uint16 msgType | payload`（リトルエンディアン、length は msgType + payload、上限64KB）
-- UDP ヘッダ（12バイト、リトルエンディアン）: `uint16 magic(0xB055) | uint8 version(2) | uint8 msgType | uint8 playerId(サーバー発は0xFF) | uint8 reserved | uint16 seq | uint32 token`
+- UDP ヘッダ（12バイト、リトルエンディアン）: `uint16 magic(0xB055) | uint8 version(3) | uint8 msgType | uint8 playerId(サーバー発は0xFF) | uint8 reserved | uint16 seq | uint32 token`
   - 1パケット1200バイト以下、再送なし、seq が古いものは捨てる
   - サーバー発のパケットの token は受け取るプレイヤーの udpToken
 - payload は UTF-8 の JSON。キー名は `internal/net/messages.go` と Unity の `NetworkMessages.cs` で一致させる。
@@ -97,6 +109,7 @@ go test ./...
 | 0x0401 | ReviveStart | C→S | `{targetId}` 倒れている味方へのインタラクトを押し始めた |
 | 0x0402 | ReviveStop | C→S | `{}` インタラクトを離した |
 | 0x0403 | Revived | S→C | `{reviverId, targetId}` 蘇生が成立した。全員に送り、targetId 本人のクライアントが HP を戻す |
+| 0x0501 | EnemyAction | 双方 | `{enemyId, actionType, pos, yaw}` 担当のクライアントで敵が攻撃などを始めた。サーバーは担当以外の全員へ中継する。担当以外から届いたものは捨てる |
 
 ### UDP
 
@@ -105,7 +118,9 @@ go test ./...
 | 0x01 | UdpBind | C→S | なし。UdpBindAck が届くまで200ms間隔で再送 |
 | 0x02 | UdpBindAck | S→C | なし |
 | 0x10 | PlayerState | C→S | `{tick, pos:{x,y,z}, yaw, pitch, vel:{x,y,z}, animState, flags, health, maxHealth, wireTip:{x,y,z}}` |
+| 0x11 | EnemyState | C→S | `{enemies:[{enemyId, tick, pos, yaw, vel, actionType}]}` 担当のクライアントだけが送る。担当以外から届いたものは捨てる。最大6体 |
 | 0x20 | WorldSnapshot | S→C | `{serverTick, players:[{playerId, tick, pos, yaw, pitch, vel, animState, flags, health, maxHealth, wireTip}]}` |
+| 0x21 | EnemySnapshot | S→C | `{serverTick, enemyOwnerId, enemies:[...EnemyState と同じ]}` WorldSnapshot に入れると1パケットに収まらないので分けている。enemyOwnerId が自分なら敵の AI を動かす（-1 は不在） |
 | 0x30 | ServerAnnounce | S→全体 | `{serverName, version, tcpPort, udpPort, playerCount, maxPlayers, phase}` |
 
 - `tick` はクライアントが推定したサーバーtick（送信時点）。他プレイヤーの補間はこの tick を時間軸にする。
@@ -121,5 +136,5 @@ go test ./...
 1. TCP 接続 → JoinRequest → JoinAccepted（または JoinRejected）
 2. UdpBind を Ack まで再送（サーバーはこのパケットの送信元を UDP の宛先にする）
 3. 接続中の全員が SetReady(true) → LoadStage → 全員の LoadComplete → GameStart(startTick = 現在tick + startDelayTicks)
-4. ゲーム中は PlayerState と WorldSnapshot を30Hzでやり取りする
+4. ゲーム中は PlayerState と WorldSnapshot・EnemySnapshot を30Hzでやり取りする。敵の担当は EnemyState も送る
 5. TCP で3秒何も届かなければ切断扱い。枠は30秒保持され、Reconnect で戻れる。Leave で即座に枠を空ける
