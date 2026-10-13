@@ -30,6 +30,10 @@ go test ./...
 - `Tools/Kai/Create Network Test Scene` で PrototypePlayerMovement からシーンとプレハブを作り直せる（既存があれば中止）
 - `Tools/Kai/Build Network Test Player` で `misoten2026/Builds/KaiNetworkTest/` にビルド（シーン一覧は変更しない）。その後 `./build.ps1 -OutDir ../misoten2026/Builds/KaiNetworkTest/Server` でサーバーを隣に置く
   - ビルド時に Unity が HDRP 設定・QualitySettings などを自動アップグレードで書き換えることがある。今回の作業とは無関係なのでコミットしない
+- 攻撃・ワイヤーの同期: 自分のプレイヤーに `PlayerActionSource`、リモート表示に `RemotePlayerActionView` を付ける
+  - 移動・攻撃・ワイヤー・死亡・蘇生のモーションとワイヤーの線を同期する。攻撃の当たり判定は、まだそれぞれのクライアントの中だけで行う
+  - 蘇生: 倒れた味方（リモート表示の子に置いた `RemoteReviveInteractable`）にインタラクトを押し続けると ReviveStart / ReviveStop を送り、サーバーが距離と時間で成否を決める
+- ビルドせずにエディタで試す: Play してロビーの `Host` ボタンを押すと、`Server/bin` のサーバーを起動して入室する（先に `./build.ps1` で一度ビルドしておく）。他のPCも Play して「Servers on LAN」から選べば入れる。Play を止めるとサーバーも止まる
 - 起動引数
 
 | 引数 | 内容 |
@@ -66,7 +70,7 @@ go test ./...
 | 7779 | UDP ブロードキャスト | ServerAnnounce（1秒ごと） |
 
 - TCP フレーム: `uint32 length | uint16 msgType | payload`（リトルエンディアン、length は msgType + payload、上限64KB）
-- UDP ヘッダ（12バイト、リトルエンディアン）: `uint16 magic(0xB055) | uint8 version(1) | uint8 msgType | uint8 playerId(サーバー発は0xFF) | uint8 reserved | uint16 seq | uint32 token`
+- UDP ヘッダ（12バイト、リトルエンディアン）: `uint16 magic(0xB055) | uint8 version(2) | uint8 msgType | uint8 playerId(サーバー発は0xFF) | uint8 reserved | uint16 seq | uint32 token`
   - 1パケット1200バイト以下、再送なし、seq が古いものは捨てる
   - サーバー発のパケットの token は受け取るプレイヤーの udpToken
 - payload は UTF-8 の JSON。キー名は `internal/net/messages.go` と Unity の `NetworkMessages.cs` で一致させる。
@@ -90,6 +94,9 @@ go test ./...
 | 0x0302 | FireNotify | S→C | `{playerId, origin, velocity}` 撃った本人以外へ中継 |
 | 0x0303 | BossDamage | C→S | `{amount}` 自分の攻撃でボスに与えたダメージ |
 | 0x0304 | BossState | S→C | `{totalDamage}` このゲームの累計ダメージ。開始時・変化時・再接続時に送る |
+| 0x0401 | ReviveStart | C→S | `{targetId}` 倒れている味方へのインタラクトを押し始めた |
+| 0x0402 | ReviveStop | C→S | `{}` インタラクトを離した |
+| 0x0403 | Revived | S→C | `{reviverId, targetId}` 蘇生が成立した。全員に送り、targetId 本人のクライアントが HP を戻す |
 
 ### UDP
 
@@ -97,15 +104,17 @@ go test ./...
 | --- | --- | --- | --- |
 | 0x01 | UdpBind | C→S | なし。UdpBindAck が届くまで200ms間隔で再送 |
 | 0x02 | UdpBindAck | S→C | なし |
-| 0x10 | PlayerState | C→S | `{tick, pos:{x,y,z}, yaw, pitch, vel:{x,y,z}, animState, flags, health, maxHealth}` |
-| 0x20 | WorldSnapshot | S→C | `{serverTick, players:[{playerId, tick, pos, yaw, pitch, vel, animState, flags}]}` |
+| 0x10 | PlayerState | C→S | `{tick, pos:{x,y,z}, yaw, pitch, vel:{x,y,z}, animState, flags, health, maxHealth, wireTip:{x,y,z}}` |
+| 0x20 | WorldSnapshot | S→C | `{serverTick, players:[{playerId, tick, pos, yaw, pitch, vel, animState, flags, health, maxHealth, wireTip}]}` |
 | 0x30 | ServerAnnounce | S→全体 | `{serverName, version, tcpPort, udpPort, playerCount, maxPlayers, phase}` |
 
 - `tick` はクライアントが推定したサーバーtick（送信時点）。他プレイヤーの補間はこの tick を時間軸にする。
 - `yaw`・`pitch` は度。pitch は Unity と同じく下向きが正。
-- `animState`: 0=Idle 1=Move 2=Dead、`flags`: bit0=接地 bit1=死亡
+- `animState`: 0=Idle 1=Move 2=Dead 3=Attack 4=Wire 5=Interact 6=Revive、`flags`: bit0=接地 bit1=死亡
+- `wireTip` はワイヤーの先端の位置。`animState` が Wire のときだけ意味を持つ
 - HP は各自のクライアントが正（自分の Status を送る）。ボスの HP は、各クライアントが自分の攻撃で減った分を BossDamage で報告し、届いた累計ダメージまで減らす（減らす方向にだけ合わせる）
 - 他プレイヤーの弾は表示専用（ダメージ0）。ダメージは撃った本人のクライアントで判定する
+- 蘇生はサーバーが判定する。ReviveStart を受けたら、蘇生する側が生きていて、相手の `flags` が死亡で、2人の `pos` の距離が `reviveRadius`（既定3m）以内なら開始する。tick ごとに同じ条件を確かめ、外れたら中断する。`reviveTimeMs`（既定3000）たったら Revived を送る。本人から生きている状態が届くまでは、同じ相手を重ねて蘇生しない
 
 ### 流れ
 

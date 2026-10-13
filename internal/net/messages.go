@@ -17,6 +17,9 @@ const (
 	MsgFireNotify   uint16 = 0x0302
 	MsgBossDamage   uint16 = 0x0303
 	MsgBossState    uint16 = 0x0304
+	MsgReviveStart  uint16 = 0x0401
+	MsgReviveStop   uint16 = 0x0402
+	MsgRevived      uint16 = 0x0403
 )
 
 // UDP のメッセージ種別（uint8）。
@@ -125,6 +128,8 @@ type PlayerState struct {
 	Flags     int     `json:"flags"`
 	Health    int     `json:"health"`
 	MaxHealth int     `json:"maxHealth"`
+	// WireTip はワイヤーの先端の位置。animState が Wire のときだけ意味を持つ。
+	WireTip Vector3 `json:"wireTip"`
 }
 
 // Fire は自分の弾を撃ったときに送る。サーバーは撃った本人以外へ FireNotify として中継する。
@@ -147,6 +152,20 @@ type BossDamage struct {
 // BossState はこのゲームでボスが受けた累計ダメージ。各クライアントは「最大HP - 累計」までHPを減らす。
 type BossState struct {
 	TotalDamage int `json:"totalDamage"`
+}
+
+// ReviveStart は倒れている味方の蘇生を始めたときに送る（インタラクトを押している間）。
+// 成否はサーバーが距離と経過時間で決める。離したら ReviveStop を送る。
+type ReviveStart struct {
+	TargetID int `json:"targetId"`
+}
+
+type ReviveStop struct{}
+
+// Revived は蘇生が成立したことを全員に知らせる。蘇生された本人のクライアントが自分の HP を戻す。
+type Revived struct {
+	ReviverID int `json:"reviverId"`
+	TargetID  int `json:"targetId"`
 }
 
 type SnapshotPlayer struct {

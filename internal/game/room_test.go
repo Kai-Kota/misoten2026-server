@@ -335,6 +335,7 @@ func TestSnapshotFitsInOnePacket(t *testing.T) {
 			Flags:     255,
 			Health:    100000,
 			MaxHealth: 100000,
+			WireTip:   gnet.Vector3{X: -123.456789, Y: -123.456789, Z: -123.456789},
 		}})
 	}
 	payload, err := json.Marshal(snapshot)

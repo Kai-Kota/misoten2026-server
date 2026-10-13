@@ -34,6 +34,22 @@ type Player struct {
 
 	State    gnet.PlayerState
 	HasState bool
+
+	// 自分が蘇生している相手。IsReviving のときだけ意味を持つ。
+	IsReviving      bool
+	ReviveTargetID  int
+	ReviveStartedAt time.Time
+	// 蘇生が成立し、本人のクライアントから生きている状態が届くのを待っている。
+	IsRevivePending bool
+}
+
+// IsDead は本人のクライアントが送ってきた状態で判断する。
+func (p *Player) IsDead() bool { return p.HasState && p.State.Flags&gnet.FlagDead != 0 }
+
+func (p *Player) clearRevive() {
+	p.IsReviving = false
+	p.ReviveTargetID = 0
+	p.ReviveStartedAt = time.Time{}
 }
 
 func (p *Player) IsConnected() bool { return p.Conn != nil }
@@ -46,4 +62,6 @@ func (p *Player) markDisconnected(now time.Time) {
 	p.UDPAddr = netip.AddrPort{}
 	p.HasUDPSeq = false
 	p.HasState = false
+	p.IsRevivePending = false
+	p.clearRevive()
 }

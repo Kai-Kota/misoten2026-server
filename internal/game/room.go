@@ -32,6 +32,9 @@ type RoomConfig struct {
 	ReconnectWindow time.Duration
 	StartDelayTicks int
 	StageName       string
+	// 蘇生に必要な長押しの時間と、蘇生できる距離（m）。0 なら既定値。
+	ReviveDuration time.Duration
+	ReviveRadius   float32
 }
 
 // UDPSender は UDP の送信先。テストで差し替えられるよう interface にしている。
@@ -64,6 +67,12 @@ func NewRoom(config RoomConfig, udp UDPSender, logger *slog.Logger, now time.Tim
 	}
 	if config.TickRate <= 0 {
 		config.TickRate = 30
+	}
+	if config.ReviveDuration <= 0 {
+		config.ReviveDuration = defaultReviveDuration
+	}
+	if config.ReviveRadius <= 0 {
+		config.ReviveRadius = defaultReviveRadius
 	}
 	return &Room{
 		config:      config,
@@ -173,6 +182,17 @@ func (r *Room) HandleFrame(conn Conn, frame gnet.Frame, now time.Time) {
 		r.bossTotalDamage += damage.Amount
 		r.logger.Info("boss damaged", "player", player.ID, "amount", damage.Amount, "total", r.bossTotalDamage)
 		r.broadcastTCP(gnet.MsgBossState, gnet.BossState{TotalDamage: r.bossTotalDamage})
+	case gnet.MsgReviveStart:
+		var request gnet.ReviveStart
+		if player == nil || r.phase != gnet.PhaseInGame || !r.decode(frame, &request) {
+			return
+		}
+		r.handleReviveStart(player, request, now)
+	case gnet.MsgReviveStop:
+		if player == nil {
+			return
+		}
+		r.handleReviveStop(player)
 	case gnet.MsgLeave:
 		if player == nil {
 			return
@@ -307,6 +327,10 @@ func (r *Room) HandleUDP(packet gnet.UDPPacket, now time.Time) {
 		}
 		player.State = state
 		player.HasState = true
+		// 蘇生された本人が起き上がったら、次の蘇生を受け付ける。
+		if !player.IsDead() {
+			player.IsRevivePending = false
+		}
 	}
 }
 
@@ -333,6 +357,7 @@ func (r *Room) Step(now time.Time) {
 		r.afterMembershipChanged(now)
 	}
 	if r.phase == gnet.PhaseInGame {
+		r.updateRevives(now)
 		r.sendSnapshot(r.TickAt(now))
 	}
 	r.updateAnnounce()
@@ -344,6 +369,7 @@ func (r *Room) afterMembershipChanged(now time.Time) {
 		r.logger.Info("room is empty; back to lobby")
 		r.phase = gnet.PhaseLobby
 		r.bossTotalDamage = 0
+		r.clearAllRevives()
 	}
 	r.broadcastLobby()
 	r.tryBeginLoading()
@@ -384,6 +410,7 @@ func (r *Room) tryStartGame(now time.Time) {
 	r.phase = gnet.PhaseInGame
 	r.startTick = r.TickAt(now) + uint32(r.config.StartDelayTicks)
 	r.bossTotalDamage = 0
+	r.clearAllRevives()
 	r.logger.Info("game start", "startTick", r.startTick)
 	r.broadcastTCP(gnet.MsgGameStart, gnet.GameStart{StartTick: r.startTick})
 	r.broadcastTCP(gnet.MsgBossState, gnet.BossState{TotalDamage: r.bossTotalDamage})

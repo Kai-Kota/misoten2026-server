@@ -20,19 +20,21 @@ import (
 )
 
 type Config struct {
-	ServerName         string `json:"serverName"`
-	TCPPort            int    `json:"tcpPort"`
-	UDPPort            int    `json:"udpPort"`
-	DiscoveryPort      int    `json:"discoveryPort"`
-	AnnounceIntervalMs int    `json:"announceIntervalMs"`
-	TickRate           int    `json:"tickRate"`
-	MaxPlayers         int    `json:"maxPlayers"`
-	PingTimeoutMs      int    `json:"pingTimeoutMs"`
-	ReconnectWindowSec int    `json:"reconnectWindowSec"`
-	StartDelayTicks    int    `json:"startDelayTicks"`
-	StageName          string `json:"stageName"`
-	LogDir             string `json:"logDir"`
-	LogLevel           string `json:"logLevel"`
+	ServerName         string  `json:"serverName"`
+	TCPPort            int     `json:"tcpPort"`
+	UDPPort            int     `json:"udpPort"`
+	DiscoveryPort      int     `json:"discoveryPort"`
+	AnnounceIntervalMs int     `json:"announceIntervalMs"`
+	TickRate           int     `json:"tickRate"`
+	MaxPlayers         int     `json:"maxPlayers"`
+	PingTimeoutMs      int     `json:"pingTimeoutMs"`
+	ReconnectWindowSec int     `json:"reconnectWindowSec"`
+	StartDelayTicks    int     `json:"startDelayTicks"`
+	StageName          string  `json:"stageName"`
+	ReviveTimeMs       int     `json:"reviveTimeMs"`
+	ReviveRadius       float32 `json:"reviveRadius"`
+	LogDir             string  `json:"logDir"`
+	LogLevel           string  `json:"logLevel"`
 }
 
 func defaultConfig() Config {
@@ -48,6 +50,8 @@ func defaultConfig() Config {
 		ReconnectWindowSec: 30,
 		StartDelayTicks:    15,
 		StageName:          "Kai_NetworkTestScene",
+		ReviveTimeMs:       3000,
+		ReviveRadius:       3,
 		LogDir:             "logs",
 		LogLevel:           "info",
 	}
@@ -100,6 +104,8 @@ func run(configPath string, parentPID int) error {
 		ReconnectWindow: time.Duration(config.ReconnectWindowSec) * time.Second,
 		StartDelayTicks: config.StartDelayTicks,
 		StageName:       config.StageName,
+		ReviveDuration:  time.Duration(config.ReviveTimeMs) * time.Millisecond,
+		ReviveRadius:    config.ReviveRadius,
 	}, udpServer, logger, time.Now())
 
 	tcpEvents := make(chan gnet.TCPEvent, 256)

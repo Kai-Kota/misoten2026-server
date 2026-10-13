@@ -10,6 +10,8 @@
   "reconnectWindowSec": 30,
   "startDelayTicks": 15,
   "stageName": "Kai_NetworkTestScene",
+  "reviveTimeMs": 3000,
+  "reviveRadius": 3,
   "logDir": "logs",
   "logLevel": "info"
 }
