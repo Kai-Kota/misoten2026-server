@@ -57,6 +57,7 @@ go test ./...
   - シーンを作り直したときは、もう一度実行する（NetworkManager が既にあれば中止）
   - Play するとロビーが出る。`Host` で始めると、Ready が揃うまでプレイヤーは動かない
 - `Tools/Kai/Build Prototype Online Player` で `misoten2026/Builds/PrototypeOnline/` にビルド。サーバーは `./build.ps1 -OutDir ../misoten2026/Builds/PrototypeOnline/Server`
+- 1台で4人を試す: `./run_local.ps1`（`-Count 2` で人数を変えられる）。ビルドを4つ起動して画面に並べ、P1 が Host になり、揃ったら自動で Ready になる。操作できるのはフォーカスのあるウィンドウだけ。P1 を閉じるとサーバーも止まる
 - 同期するもの: プレイヤーの移動・攻撃・ワイヤー・HP・死亡・蘇生、弾の表示、敵の位置・攻撃・HP
 - 同期しないもの: 武器の合体（各クライアントで勝手に合体する。他のプレイヤーの弾は合体前の見た目で表示される）
 - 敵: サーバーが決めた担当（接続中で一番小さい playerId）のクライアントだけが AI を動かす。担当は倒れていない一番近いプレイヤーを狙う
