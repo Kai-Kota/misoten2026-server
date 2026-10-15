@@ -3,16 +3,18 @@ package game
 import gnet "misoten2026/server/internal/net"
 
 // checkGameEnd はゲーム中に勝敗が決まったかを調べ、決まったら結果の段階へ進めて全員に GameEnd を送る。
-// ボスへの累計ダメージが最大HPに届いたらクリア、接続中の全員が倒れていたらゲームオーバー。
+// ボスへの累計ダメージが最大HPに届いたらクリア。接続中の全員が倒れているか、村の HP が 0 になったらゲームオーバー。
 func (r *Room) checkGameEnd() {
 	if r.phase != gnet.PhaseInGame {
 		return
 	}
 	switch {
 	case r.bossMaxHealth > 0 && r.bossTotalDamage >= r.bossMaxHealth:
-		r.endGame(true)
+		r.endGame(true, gnet.EndBossDefeated)
 	case r.isEveryoneDead():
-		r.endGame(false)
+		r.endGame(false, gnet.EndEveryoneDead)
+	case r.villageHealth <= 0:
+		r.endGame(false, gnet.EndVillageDestroyed)
 	}
 }
 
@@ -32,11 +34,13 @@ func (r *Room) isEveryoneDead() bool {
 	return count > 0
 }
 
-func (r *Room) endGame(isCleared bool) {
+func (r *Room) endGame(isCleared bool, reason int) {
 	r.phase = gnet.PhaseResult
 	r.isCleared = isCleared
+	r.endReason = reason
 	r.clearAllRevives()
-	r.logger.Info("game end", "isCleared", isCleared, "bossTotalDamage", r.bossTotalDamage, "bossMaxHealth", r.bossMaxHealth)
-	r.broadcastTCP(gnet.MsgGameEnd, gnet.GameEnd{IsCleared: isCleared})
+	r.logger.Info("game end", "isCleared", isCleared, "reason", reason, "bossTotalDamage", r.bossTotalDamage,
+		"bossMaxHealth", r.bossMaxHealth, "villageHealth", r.villageHealth)
+	r.broadcastTCP(gnet.MsgGameEnd, gnet.GameEnd{IsCleared: isCleared, Reason: reason})
 	r.broadcastLobby()
 }

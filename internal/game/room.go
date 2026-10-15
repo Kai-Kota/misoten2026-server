@@ -35,6 +35,10 @@ type RoomConfig struct {
 	// 蘇生に必要な長押しの時間と、蘇生できる距離（m）。0 なら既定値。
 	ReviveDuration time.Duration
 	ReviveRadius   float32
+	// 村の最大HPと、VillageDamageInterval ごとに減らす量。0 なら既定値。
+	VillageMaxHealth      int
+	VillageDamage         int
+	VillageDamageInterval time.Duration
 }
 
 // UDPSender は UDP の送信先。テストで差し替えられるよう interface にしている。
@@ -56,8 +60,11 @@ type Room struct {
 	// このゲームでボスが受けた累計ダメージと、クライアントが LoadComplete で伝えたボスの最大HP（0 は不明）。
 	bossTotalDamage int
 	bossMaxHealth   int
-	// 結果の段階で、ボスを倒して終わったか。
+	// このゲームでの村の HP。
+	villageHealth int
+	// 結果の段階で、ボスを倒して終わったか。endReason は終わった理由（gnet.End*）。
 	isCleared bool
+	endReason int
 	// 敵を動かす担当の playerId（-1 は不在）と、担当から届いた最新の敵の状態。
 	enemyOwnerID int
 	enemies      []gnet.EnemySample
@@ -79,6 +86,15 @@ func NewRoom(config RoomConfig, udp UDPSender, logger *slog.Logger, now time.Tim
 	}
 	if config.ReviveRadius <= 0 {
 		config.ReviveRadius = defaultReviveRadius
+	}
+	if config.VillageMaxHealth <= 0 {
+		config.VillageMaxHealth = defaultVillageMaxHealth
+	}
+	if config.VillageDamage <= 0 {
+		config.VillageDamage = defaultVillageDamage
+	}
+	if config.VillageDamageInterval <= 0 {
+		config.VillageDamageInterval = defaultVillageDamageInterval
 	}
 	return &Room{
 		config:       config,
@@ -300,8 +316,9 @@ func (r *Room) handleReconnect(conn Conn, request gnet.Reconnect, now time.Time)
 	case gnet.PhaseInGame:
 		sendJSON(conn, gnet.MsgGameStart, gnet.GameStart{StartTick: r.startTick})
 		sendJSON(conn, gnet.MsgBossState, gnet.BossState{TotalDamage: r.bossTotalDamage})
+		sendJSON(conn, gnet.MsgVillageState, r.villageState())
 	case gnet.PhaseResult:
-		sendJSON(conn, gnet.MsgGameEnd, gnet.GameEnd{IsCleared: r.isCleared})
+		sendJSON(conn, gnet.MsgGameEnd, gnet.GameEnd{IsCleared: r.isCleared, Reason: r.endReason})
 	}
 }
 
@@ -382,6 +399,7 @@ func (r *Room) Step(now time.Time) {
 	if r.phase == gnet.PhaseInGame {
 		r.updateRevives(now)
 		r.updateEnemyOwner()
+		r.updateVillage(now)
 		tick := r.TickAt(now)
 		r.sendSnapshot(tick)
 		r.sendEnemySnapshot(tick)
@@ -440,6 +458,7 @@ func (r *Room) tryStartGame(now time.Time) {
 	r.phase = gnet.PhaseInGame
 	r.startTick = r.TickAt(now) + uint32(r.config.StartDelayTicks)
 	r.bossTotalDamage = 0
+	r.villageHealth = r.config.VillageMaxHealth
 	// 前のゲームで倒れていた状態が残っていると、開始直後にゲームオーバーになるので捨てる。
 	for _, player := range r.players {
 		if player != nil {
@@ -451,6 +470,7 @@ func (r *Room) tryStartGame(now time.Time) {
 	r.logger.Info("game start", "startTick", r.startTick)
 	r.broadcastTCP(gnet.MsgGameStart, gnet.GameStart{StartTick: r.startTick})
 	r.broadcastTCP(gnet.MsgBossState, gnet.BossState{TotalDamage: r.bossTotalDamage})
+	r.broadcastTCP(gnet.MsgVillageState, r.villageState())
 	r.broadcastLobby()
 }
 

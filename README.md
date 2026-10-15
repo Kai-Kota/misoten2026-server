@@ -83,7 +83,7 @@ go test ./...
 | 7779 | UDP ブロードキャスト | ServerAnnounce（1秒ごと） |
 
 - TCP フレーム: `uint32 length | uint16 msgType | payload`（リトルエンディアン、length は msgType + payload、上限64KB）
-- UDP ヘッダ（12バイト、リトルエンディアン）: `uint16 magic(0xB055) | uint8 version(3) | uint8 msgType | uint8 playerId(サーバー発は0xFF) | uint8 reserved | uint16 seq | uint32 token`
+- UDP ヘッダ（12バイト、リトルエンディアン）: `uint16 magic(0xB055) | uint8 version(4) | uint8 msgType | uint8 playerId(サーバー発は0xFF) | uint8 reserved | uint16 seq | uint32 token`
   - 1パケット1200バイト以下、再送なし、seq が古いものは捨てる
   - サーバー発のパケットの token は受け取るプレイヤーの udpToken
 - payload は UTF-8 の JSON。キー名は `internal/net/messages.go` と Unity の `NetworkMessages.cs` で一致させる。
@@ -103,10 +103,12 @@ go test ./...
 | 0x0201 | LoadStage | S→C | `{stageName}` |
 | 0x0202 | LoadComplete | C→S | `{}` |
 | 0x0203 | GameStart | S→C | `{startTick}` |
+| 0x0204 | GameEnd | S→C | `{isCleared, reason}` reason: 1=ボス撃破 2=全員ダウン 3=村の HP が 0。再接続時にも送る |
 | 0x0301 | Fire | C→S | `{origin, velocity}` 自分の弾を撃ったとき |
 | 0x0302 | FireNotify | S→C | `{playerId, origin, velocity}` 撃った本人以外へ中継 |
 | 0x0303 | BossDamage | C→S | `{amount}` 自分の攻撃でボスに与えたダメージ |
 | 0x0304 | BossState | S→C | `{totalDamage}` このゲームの累計ダメージ。開始時・変化時・再接続時に送る |
+| 0x0305 | VillageState | S→C | `{health, maxHealth}` 村の HP。サーバーが減らす。開始時・変化時・再接続時に送る |
 | 0x0401 | ReviveStart | C→S | `{targetId}` 倒れている味方へのインタラクトを押し始めた |
 | 0x0402 | ReviveStop | C→S | `{}` インタラクトを離した |
 | 0x0403 | Revived | S→C | `{reviverId, targetId}` 蘇生が成立した。全員に送り、targetId 本人のクライアントが HP を戻す |
@@ -131,6 +133,7 @@ go test ./...
 - HP は各自のクライアントが正（自分の Status を送る）。ボスの HP は、各クライアントが自分の攻撃で減った分を BossDamage で報告し、届いた累計ダメージまで減らす（減らす方向にだけ合わせる）
 - 他プレイヤーの弾は表示専用（ダメージ0）。ダメージは撃った本人のクライアントで判定する
 - 蘇生はサーバーが判定する。ReviveStart を受けたら、蘇生する側が生きていて、相手の `flags` が死亡で、2人の `pos` の距離が `reviveRadius`（既定3m）以内なら開始する。tick ごとに同じ条件を確かめ、外れたら中断する。`reviveTimeMs`（既定3000）たったら Revived を送る。本人から生きている状態が届くまでは、同じ相手を重ねて蘇生しない
+- 村の HP はサーバーが持つ。startTick から `villageDamageIntervalMs`（既定1000）ごとに `villageDamage`（既定1）ずつ、`villageMaxHealth`（既定100）から減らす。経過時間から求めるので tick が遅れてもずれない
 
 ### 流れ
 
@@ -153,5 +156,6 @@ go test ./...
 - 勝敗はサーバーが決めて `GameEnd` を全員に送る。その後は結果の段階（phase 3）になり、全員が抜けるとロビーへ戻る
   - クリア: ボスへの累計ダメージが最大HP以上。最大HPは各クライアントが `LoadComplete` で伝える
   - ゲームオーバー: 接続中の全員が倒れている（蘇生されて起き上がる途中の人は生きているものとして数える）
+  - ゲームオーバー: 村の HP が 0 になった。クライアントは `VillageHealthSync` で届いた値を VillageGage の `Status` に入れて表示するだけ
 - 結果画面の「タイトルへ」で退室してタイトルへ戻る。ホストが戻るとサーバーが止まり、他の人は結果画面のまま「タイトルへ」で戻る
 - 起動引数の `-host` / `-connect` があるときは、最初の1回だけタイトルを飛ばして入室する（`run_local.ps1` はそのまま使える）

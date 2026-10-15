@@ -33,27 +33,34 @@ type Config struct {
 	StageName          string  `json:"stageName"`
 	ReviveTimeMs       int     `json:"reviveTimeMs"`
 	ReviveRadius       float32 `json:"reviveRadius"`
-	LogDir             string  `json:"logDir"`
-	LogLevel           string  `json:"logLevel"`
+	// 村の HP は、ゲーム開始から villageDamageIntervalMs ごとに villageDamage ずつ減る。
+	VillageMaxHealth        int    `json:"villageMaxHealth"`
+	VillageDamage           int    `json:"villageDamage"`
+	VillageDamageIntervalMs int    `json:"villageDamageIntervalMs"`
+	LogDir                  string `json:"logDir"`
+	LogLevel                string `json:"logLevel"`
 }
 
 func defaultConfig() Config {
 	return Config{
-		ServerName:         "misoten2026",
-		TCPPort:            7777,
-		UDPPort:            7778,
-		DiscoveryPort:      7779,
-		AnnounceIntervalMs: 1000,
-		TickRate:           30,
-		MaxPlayers:         4,
-		PingTimeoutMs:      3000,
-		ReconnectWindowSec: 30,
-		StartDelayTicks:    15,
-		StageName:          "Kai_NetworkTestScene",
-		ReviveTimeMs:       3000,
-		ReviveRadius:       3,
-		LogDir:             "logs",
-		LogLevel:           "info",
+		ServerName:              "misoten2026",
+		TCPPort:                 7777,
+		UDPPort:                 7778,
+		DiscoveryPort:           7779,
+		AnnounceIntervalMs:      1000,
+		TickRate:                30,
+		MaxPlayers:              4,
+		PingTimeoutMs:           3000,
+		ReconnectWindowSec:      30,
+		StartDelayTicks:         15,
+		StageName:               "Kai_NetworkTestScene",
+		ReviveTimeMs:            3000,
+		ReviveRadius:            3,
+		VillageMaxHealth:        100,
+		VillageDamage:           1,
+		VillageDamageIntervalMs: 1000,
+		LogDir:                  "logs",
+		LogLevel:                "info",
 	}
 }
 
@@ -98,14 +105,17 @@ func run(configPath string, parentPID int) error {
 	}
 
 	room := game.NewRoom(game.RoomConfig{
-		TickRate:        config.TickRate,
-		MaxPlayers:      config.MaxPlayers,
-		PingTimeout:     time.Duration(config.PingTimeoutMs) * time.Millisecond,
-		ReconnectWindow: time.Duration(config.ReconnectWindowSec) * time.Second,
-		StartDelayTicks: config.StartDelayTicks,
-		StageName:       config.StageName,
-		ReviveDuration:  time.Duration(config.ReviveTimeMs) * time.Millisecond,
-		ReviveRadius:    config.ReviveRadius,
+		TickRate:              config.TickRate,
+		MaxPlayers:            config.MaxPlayers,
+		PingTimeout:           time.Duration(config.PingTimeoutMs) * time.Millisecond,
+		ReconnectWindow:       time.Duration(config.ReconnectWindowSec) * time.Second,
+		StartDelayTicks:       config.StartDelayTicks,
+		StageName:             config.StageName,
+		ReviveDuration:        time.Duration(config.ReviveTimeMs) * time.Millisecond,
+		ReviveRadius:          config.ReviveRadius,
+		VillageMaxHealth:      config.VillageMaxHealth,
+		VillageDamage:         config.VillageDamage,
+		VillageDamageInterval: time.Duration(config.VillageDamageIntervalMs) * time.Millisecond,
 	}, udpServer, logger, time.Now())
 
 	tcpEvents := make(chan gnet.TCPEvent, 256)

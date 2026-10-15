@@ -12,6 +12,9 @@
   "stageName": "Kai_NetworkTestScene",
   "reviveTimeMs": 3000,
   "reviveRadius": 3,
+  "villageMaxHealth": 100,
+  "villageDamage": 1,
+  "villageDamageIntervalMs": 1000,
   "logDir": "logs",
   "logLevel": "info"
 }

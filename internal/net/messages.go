@@ -18,6 +18,7 @@ const (
 	MsgFireNotify   uint16 = 0x0302
 	MsgBossDamage   uint16 = 0x0303
 	MsgBossState    uint16 = 0x0304
+	MsgVillageState uint16 = 0x0305
 	MsgReviveStart  uint16 = 0x0401
 	MsgReviveStop   uint16 = 0x0402
 	MsgRevived      uint16 = 0x0403
@@ -120,9 +121,17 @@ type GameStart struct {
 	StartTick uint32 `json:"startTick"`
 }
 
-// GameEnd は勝敗が決まったときに全員へ送る。isCleared が true ならボスを倒した、false なら全員が倒れた。
+// GameEnd.reason の値。
+const (
+	EndBossDefeated     = 1
+	EndEveryoneDead     = 2
+	EndVillageDestroyed = 3
+)
+
+// GameEnd は勝敗が決まったときに全員へ送る。isCleared が true ならボスを倒した。reason は終わった理由（End*）。
 type GameEnd struct {
 	IsCleared bool `json:"isCleared"`
+	Reason    int  `json:"reason"`
 }
 
 type Vector3 struct {
@@ -166,6 +175,12 @@ type BossDamage struct {
 // BossState はこのゲームでボスが受けた累計ダメージ。各クライアントは「最大HP - 累計」までHPを減らす。
 type BossState struct {
 	TotalDamage int `json:"totalDamage"`
+}
+
+// VillageState は村の HP。サーバーがゲーム開始から一定間隔で減らし、0 になったらゲームオーバーにする。
+type VillageState struct {
+	Health    int `json:"health"`
+	MaxHealth int `json:"maxHealth"`
 }
 
 // ReviveStart は倒れている味方の蘇生を始めたときに送る（インタラクトを押している間）。
