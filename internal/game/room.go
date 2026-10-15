@@ -53,8 +53,11 @@ type Room struct {
 	phase       int
 	startTime   time.Time
 	startTick   uint32
-	// このゲームでボスが受けた累計ダメージ。
+	// このゲームでボスが受けた累計ダメージと、クライアントが LoadComplete で伝えたボスの最大HP（0 は不明）。
 	bossTotalDamage int
+	bossMaxHealth   int
+	// 結果の段階で、ボスを倒して終わったか。
+	isCleared bool
 	// 敵を動かす担当の playerId（-1 は不在）と、担当から届いた最新の敵の状態。
 	enemyOwnerID int
 	enemies      []gnet.EnemySample
@@ -157,11 +160,16 @@ func (r *Room) HandleFrame(conn Conn, frame gnet.Frame, now time.Time) {
 		r.broadcastLobby()
 		r.tryBeginLoading()
 	case gnet.MsgLoadComplete:
-		if player == nil || r.phase != gnet.PhaseLoading {
+		var loadComplete gnet.LoadComplete
+		if player == nil || r.phase != gnet.PhaseLoading || !r.decode(frame, &loadComplete) {
 			return
 		}
 		player.IsLoaded = true
-		r.logger.Info("load complete", "player", player.ID)
+		// 全員同じステージなので同じ値が届くはずだが、食い違ったら大きい方を使う。
+		if loadComplete.BossMaxHealth > r.bossMaxHealth {
+			r.bossMaxHealth = loadComplete.BossMaxHealth
+		}
+		r.logger.Info("load complete", "player", player.ID, "bossMaxHealth", loadComplete.BossMaxHealth)
 		r.tryStartGame(now)
 	case gnet.MsgFire:
 		var fire gnet.Fire
@@ -186,6 +194,7 @@ func (r *Room) HandleFrame(conn Conn, frame gnet.Frame, now time.Time) {
 		r.bossTotalDamage += damage.Amount
 		r.logger.Info("boss damaged", "player", player.ID, "amount", damage.Amount, "total", r.bossTotalDamage)
 		r.broadcastTCP(gnet.MsgBossState, gnet.BossState{TotalDamage: r.bossTotalDamage})
+		r.checkGameEnd()
 	case gnet.MsgReviveStart:
 		var request gnet.ReviveStart
 		if player == nil || r.phase != gnet.PhaseInGame || !r.decode(frame, &request) {
@@ -291,6 +300,8 @@ func (r *Room) handleReconnect(conn Conn, request gnet.Reconnect, now time.Time)
 	case gnet.PhaseInGame:
 		sendJSON(conn, gnet.MsgGameStart, gnet.GameStart{StartTick: r.startTick})
 		sendJSON(conn, gnet.MsgBossState, gnet.BossState{TotalDamage: r.bossTotalDamage})
+	case gnet.PhaseResult:
+		sendJSON(conn, gnet.MsgGameEnd, gnet.GameEnd{IsCleared: r.isCleared})
 	}
 }
 
@@ -374,6 +385,7 @@ func (r *Room) Step(now time.Time) {
 		tick := r.TickAt(now)
 		r.sendSnapshot(tick)
 		r.sendEnemySnapshot(tick)
+		r.checkGameEnd()
 	}
 	r.updateAnnounce()
 }
@@ -384,6 +396,7 @@ func (r *Room) afterMembershipChanged(now time.Time) {
 		r.logger.Info("room is empty; back to lobby")
 		r.phase = gnet.PhaseLobby
 		r.bossTotalDamage = 0
+		r.bossMaxHealth = 0
 		r.clearAllRevives()
 		r.clearEnemies()
 	}
@@ -403,6 +416,7 @@ func (r *Room) tryBeginLoading() {
 		}
 	}
 	r.phase = gnet.PhaseLoading
+	r.bossMaxHealth = 0
 	r.logger.Info("all ready; loading", "stage", r.config.StageName)
 	for _, player := range r.players {
 		if player != nil && player.IsConnected() {
@@ -426,6 +440,12 @@ func (r *Room) tryStartGame(now time.Time) {
 	r.phase = gnet.PhaseInGame
 	r.startTick = r.TickAt(now) + uint32(r.config.StartDelayTicks)
 	r.bossTotalDamage = 0
+	// 前のゲームで倒れていた状態が残っていると、開始直後にゲームオーバーになるので捨てる。
+	for _, player := range r.players {
+		if player != nil {
+			player.HasState = false
+		}
+	}
 	r.clearAllRevives()
 	r.clearEnemies()
 	r.logger.Info("game start", "startTick", r.startTick)

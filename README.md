@@ -139,3 +139,19 @@ go test ./...
 3. 接続中の全員が SetReady(true) → LoadStage → 全員の LoadComplete → GameStart(startTick = 現在tick + startDelayTicks)
 4. ゲーム中は PlayerState と WorldSnapshot・EnemySnapshot を30Hzでやり取りする。敵の担当は EnemyState も送る
 5. TCP で3秒何も届かなければ切断扱い。枠は30秒保持され、Reconnect で戻れる。Leave で即座に枠を空ける
+
+## Unity 側（シーン遷移）
+
+- 流れ: `Title`（タイトル → 部屋を立てる／LAN の部屋・IP で参加）→ `Prototype`（ロビー → ゲーム → 結果）→ タイトルへ → `Title`
+- 画面は uGUI。`PR_Kai/01_Prefabs/UI` の `TitleScreen` / `LobbyScreen` / `ResultScreen` プレハブで、見た目はプレハブを直せば変えられる
+  - タイトルで選んだ内容は `ConnectRequest` でゲームのシーンの NetworkManager に渡り、そこで Host / 接続する
+  - OnGUI のロビー（`NetworkLobbyView`）は Prototype ではデバッグ表示だけ（F1 で表示）。通信テストのシーンは今までどおり
+- `Tools/Kai/Setup Scene Flow` で組み込む（何度実行してもよい）。先に `Setup Prototype Online` を済ませておく
+  - プレハブがなければ作り、`Title.unity` に TitleScreen、`Prototype.unity` に LobbyScreen・ResultScreen を置く。どちらにも EventSystem を置く
+  - ビルドのシーン一覧の先頭に `Title`、次に `Prototype` を入れる（エディタで `Title` から Play して遷移を試せる）
+  - プレハブを作り直すときは `Tools/Kai/Rebuild Scene Flow UI Prefabs`（手で直した見た目は消える）
+- 勝敗はサーバーが決めて `GameEnd` を全員に送る。その後は結果の段階（phase 3）になり、全員が抜けるとロビーへ戻る
+  - クリア: ボスへの累計ダメージが最大HP以上。最大HPは各クライアントが `LoadComplete` で伝える
+  - ゲームオーバー: 接続中の全員が倒れている（蘇生されて起き上がる途中の人は生きているものとして数える）
+- 結果画面の「タイトルへ」で退室してタイトルへ戻る。ホストが戻るとサーバーが止まり、他の人は結果画面のまま「タイトルへ」で戻る
+- 起動引数の `-host` / `-connect` があるときは、最初の1回だけタイトルを飛ばして入室する（`run_local.ps1` はそのまま使える）

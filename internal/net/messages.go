@@ -13,6 +13,7 @@ const (
 	MsgLoadStage    uint16 = 0x0201
 	MsgLoadComplete uint16 = 0x0202
 	MsgGameStart    uint16 = 0x0203
+	MsgGameEnd      uint16 = 0x0204
 	MsgFire         uint16 = 0x0301
 	MsgFireNotify   uint16 = 0x0302
 	MsgBossDamage   uint16 = 0x0303
@@ -47,6 +48,8 @@ const (
 	PhaseLobby   = 0
 	PhaseLoading = 1
 	PhaseInGame  = 2
+	// 勝敗が決まり、結果を表示している。全員が抜けるとロビーへ戻る。
+	PhaseResult = 3
 )
 
 // PlayerState.flags のビット。
@@ -108,10 +111,18 @@ type LoadStage struct {
 	StageName string `json:"stageName"`
 }
 
-type LoadComplete struct{}
+// LoadComplete はステージの読み込みが終わったときに送る。bossMaxHealth はそのステージのボスの最大HP（勝敗の判定に使う）。
+type LoadComplete struct {
+	BossMaxHealth int `json:"bossMaxHealth"`
+}
 
 type GameStart struct {
 	StartTick uint32 `json:"startTick"`
+}
+
+// GameEnd は勝敗が決まったときに全員へ送る。isCleared が true ならボスを倒した、false なら全員が倒れた。
+type GameEnd struct {
+	IsCleared bool `json:"isCleared"`
 }
 
 type Vector3 struct {
@@ -214,7 +225,9 @@ type WorldSnapshot struct {
 	Players    []SnapshotPlayer `json:"players"`
 }
 
+// ServerAnnounce の serverId はサーバーの起動ごとに決まる。NIC ごとに別の送信元から届いても同じサーバーだと分かる。
 type ServerAnnounce struct {
+	ServerID    uint32 `json:"serverId"`
 	ServerName  string `json:"serverName"`
 	Version     int    `json:"version"`
 	TCPPort     int    `json:"tcpPort"`

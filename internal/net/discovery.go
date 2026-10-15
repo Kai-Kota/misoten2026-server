@@ -2,6 +2,8 @@ package net
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/binary"
 	"encoding/json"
 	"log/slog"
 	"net"
@@ -11,6 +13,7 @@ import (
 
 // RunDiscovery は interval ごとに ServerAnnounce をブロードキャストする。
 // 255.255.255.255 に加え、NIC が複数あっても届くよう各 NIC のブロードキャストアドレスにも送る。
+// 同じ告知が NIC の数だけ別々の送信元から届くので、クライアントが1つにまとめられるよう起動ごとの serverId を載せる。
 func RunDiscovery(ctx context.Context, port int, interval time.Duration, announce func() ServerAnnounce, logger *slog.Logger) {
 	logger = logger.With("component", "discovery")
 	// Go の UDP ソケットは SO_BROADCAST が有効な状態で作られる。
@@ -23,10 +26,13 @@ func RunDiscovery(ctx context.Context, port int, interval time.Duration, announc
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
+	serverID := newServerID()
 	var seq uint16
 	for {
 		seq++
-		payload, err := json.Marshal(announce())
+		message := announce()
+		message.ServerID = serverID
+		payload, err := json.Marshal(message)
 		if err == nil {
 			packet, encodeErr := EncodePacket(UDPHeader{MsgType: MsgServerAnnounce, PlayerID: ServerPlayerID, Seq: seq}, payload)
 			if encodeErr == nil {
@@ -41,6 +47,19 @@ func RunDiscovery(ctx context.Context, port int, interval time.Duration, announc
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+		}
+	}
+}
+
+// newServerID は 0 以外の乱数を返す（0 は serverId を送らない古いサーバーとして扱われる）。
+func newServerID() uint32 {
+	var buffer [4]byte
+	for {
+		if _, err := rand.Read(buffer[:]); err != nil {
+			panic(err)
+		}
+		if id := binary.LittleEndian.Uint32(buffer[:]); id != 0 {
+			return id
 		}
 	}
 }

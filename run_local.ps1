@@ -1,11 +1,13 @@
-# 1台のPCでゲームを複数起動して通信を試す。1つ目が -host でサーバーを起動し、残りは 127.0.0.1 に入る。
+﻿# 1台のPCでゲームを複数起動して通信を試す。1つ目が -host でサーバーを起動し、残りは 127.0.0.1 に入る。
 # 指定した人数が揃うと全員が自動で Ready になる。ウィンドウは画面に並べる。操作できるのはフォーカスのあるウィンドウだけ。
 #   ./run_local.ps1                                   -> Builds/PrototypeOnline/PrototypeOnline.exe を4つ
 #   ./run_local.ps1 -Count 2
 #   ./run_local.ps1 -Exe ../misoten2026/Builds/KaiNetworkTest/KaiNetworkTest.exe
+#   ./run_local.ps1 -Count 2 -ShowTitle             -> 自動で入室せず、タイトルから操作する（部屋を立てる／参加するを手で試す）
 param(
     [string]$Exe = (Join-Path $PSScriptRoot "../misoten2026/Builds/PrototypeOnline/PrototypeOnline.exe"),
-    [ValidateRange(1, 4)][int]$Count = 4
+    [ValidateRange(1, 4)][int]$Count = 4,
+    [switch]$ShowTitle
 )
 $ErrorActionPreference = "Stop"
 
@@ -30,10 +32,15 @@ $processes = @()
 for ($index = 0; $index -lt $Count; $index++) {
     $arguments = @("-name", "P$($index + 1)", "-autoReady", $Count, "-screen-fullscreen", "0",
         "-screen-width", $width, "-screen-height", $height)
-    $arguments = if ($index -eq 0) { @("-host") + $arguments } else { @("-connect", "127.0.0.1") + $arguments }
+    if ($ShowTitle) {
+        # タイトルから始める。名前はタイトルで入れ直せる。
+        $arguments = @("-screen-fullscreen", "0", "-screen-width", $width, "-screen-height", $height)
+    } else {
+        $arguments = if ($index -eq 0) { @("-host") + $arguments } else { @("-connect", "127.0.0.1") + $arguments }
+    }
     $processes += Start-Process -FilePath $Exe -ArgumentList $arguments -PassThru
     # Host のサーバーが起動するのを待ってから残りを起動する（間に合わなくても再試行はしない）。
-    Start-Sleep -Seconds $(if ($index -eq 0) { 3 } else { 1 })
+    Start-Sleep -Seconds $(if ($index -eq 0 -and -not $ShowTitle) { 3 } else { 1 })
 }
 
 for ($index = 0; $index -lt $processes.Count; $index++) {
