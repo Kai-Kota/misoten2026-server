@@ -56,6 +56,8 @@ go test ./...
 - `Tools/Kai/Setup Prototype Online` で `00_Production/00_Scenes/00_Prototype/Prototype.unity` に通信を組み込む。リモート表示 `PR_Kai/01_Prefabs/RemotePlayer_Folia` も自分のプレイヤーから作る（あれば上書き）
   - シーンを作り直したときは、もう一度実行する（NetworkManager が既にあれば中止）
   - Play するとロビーが出る。`Host` で始めると、Ready が揃うまでプレイヤーは動かない
+- `Tools/Kai/Rebuild Remote Player Prefab` で `RemotePlayer_Folia` だけを作り直す（シーンは変えない）。自分のプレイヤーのプレハブを変えたときに使う
+  - 見た目は playerId ごとに 1P Folia / 2P Rivet / 3P Twig / 4P Boxy（`PlayerModelAppearance`）。自分のプレイヤーに `PlayerModelAppearance` がなければ、固定のモデルを外して付ける
 - `Tools/Kai/Build Prototype Online Player` で `misoten2026/Builds/PrototypeOnline/` にビルド。サーバーは `./build.ps1 -OutDir ../misoten2026/Builds/PrototypeOnline/Server`
 - 1台で4人を試す: `./run_local.ps1`（`-Count 2` で人数を変えられる）。ビルドを4つ起動して画面に並べ、P1 が Host になり、揃ったら自動で Ready になる。操作できるのはフォーカスのあるウィンドウだけ。P1 を閉じるとサーバーも止まる
 - 同期するもの: プレイヤーの移動・攻撃・ワイヤー・HP・死亡・蘇生、弾の表示、敵の位置・攻撃・HP
