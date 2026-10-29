@@ -185,7 +185,14 @@ func (r *Room) HandleFrame(conn Conn, frame gnet.Frame, now time.Time) {
 		if loadComplete.BossMaxHealth > r.bossMaxHealth {
 			r.bossMaxHealth = loadComplete.BossMaxHealth
 		}
-		r.logger.Info("load complete", "player", player.ID, "bossMaxHealth", loadComplete.BossMaxHealth)
+		if loadComplete.CharacterID >= 0 && loadComplete.CharacterID < MaxPlayerSlots {
+			player.CharacterID = loadComplete.CharacterID
+		} else {
+			player.CharacterID = -1
+		}
+		r.logger.Info("load complete", "player", player.ID, "bossMaxHealth", loadComplete.BossMaxHealth, "character", player.CharacterID)
+		// 選んだキャラを全員に知らせる（開始前に見た目を合わせられるよう、GameStart より先に送る）。
+		r.broadcastLobby()
 		r.tryStartGame(now)
 	case gnet.MsgFire:
 		var fire gnet.Fire
@@ -266,6 +273,7 @@ func (r *Room) handleJoin(conn Conn, request gnet.JoinRequest, now time.Time) {
 		Token:          r.newToken(),
 		Conn:           conn,
 		LastReceivedAt: now,
+		CharacterID:    -1,
 	}
 	r.players[slot] = player
 	r.connPlayers[conn.ID()] = player
@@ -519,6 +527,8 @@ func (r *Room) broadcastLobby() {
 				PlayerName:  player.Name,
 				IsReady:     player.IsReady,
 				IsConnected: player.IsConnected(),
+				CharacterID: player.CharacterID,
+				IsLoaded:    player.IsLoaded,
 			})
 		}
 	}

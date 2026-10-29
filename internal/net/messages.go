@@ -81,11 +81,14 @@ type SetReady struct {
 	IsReady bool `json:"isReady"`
 }
 
+// LobbyPlayer の characterId は選んだキャラ（0〜3）。まだ選んでいなければ -1。
 type LobbyPlayer struct {
 	PlayerID    int    `json:"playerId"`
 	PlayerName  string `json:"playerName"`
 	IsReady     bool   `json:"isReady"`
 	IsConnected bool   `json:"isConnected"`
+	CharacterID int    `json:"characterId"`
+	IsLoaded    bool   `json:"isLoaded"`
 }
 
 type LobbyState struct {
@@ -113,8 +116,10 @@ type LoadStage struct {
 }
 
 // LoadComplete はステージの読み込みが終わったときに送る。bossMaxHealth はそのステージのボスの最大HP（勝敗の判定に使う）。
+// characterId はキャラ選択で選んだキャラ（0〜3）。選んでいなければ -1。
 type LoadComplete struct {
 	BossMaxHealth int `json:"bossMaxHealth"`
+	CharacterID   int `json:"characterId"`
 }
 
 type GameStart struct {

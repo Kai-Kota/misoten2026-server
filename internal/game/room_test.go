@@ -190,6 +190,36 @@ func TestAllReadyStartsGame(t *testing.T) {
 	}
 }
 
+func TestLoadCompleteSharesCharacter(t *testing.T) {
+	f := newFixture(t)
+	first, a := f.join("A")
+	second, b := f.join("B")
+	var lobby gnet.LobbyState
+	if !first.last(t, gnet.MsgLobbyState, &lobby) || lobby.Players[0].CharacterID != -1 || lobby.Players[1].CharacterID != -1 {
+		t.Fatalf("character before selection: %+v", lobby.Players)
+	}
+	for _, conn := range []*fakeConn{first, second} {
+		f.send(conn, gnet.MsgSetReady, gnet.SetReady{IsReady: true})
+	}
+
+	// 1人目が選んだキャラは、全員がそろう前に2人目へ届く。範囲外の値は「選んでいない」にする。
+	f.send(first, gnet.MsgLoadComplete, gnet.LoadComplete{CharacterID: 2})
+	if !second.last(t, gnet.MsgLobbyState, &lobby) || lobby.Players[a.PlayerID].CharacterID != 2 {
+		t.Fatalf("first player's character was not shared: %+v", lobby.Players)
+	}
+	// 何人がゲームのシーンに着いたかも届く（開始待ちの画面に出す）。
+	if !lobby.Players[a.PlayerID].IsLoaded || lobby.Players[b.PlayerID].IsLoaded {
+		t.Fatalf("loaded flags were wrong: %+v", lobby.Players)
+	}
+	f.send(second, gnet.MsgLoadComplete, gnet.LoadComplete{CharacterID: 7})
+	if !first.last(t, gnet.MsgLobbyState, &lobby) || lobby.Players[b.PlayerID].CharacterID != -1 {
+		t.Fatalf("out of range character was accepted: %+v", lobby.Players)
+	}
+	if f.room.phase != gnet.PhaseInGame {
+		t.Fatal("game did not start")
+	}
+}
+
 func TestPingIsAnsweredWithServerTick(t *testing.T) {
 	f := newFixture(t)
 	conn, _ := f.join("A")

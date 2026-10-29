@@ -26,6 +26,8 @@ type Player struct {
 	DisconnectedAt time.Time
 	IsReady        bool
 	IsLoaded       bool
+	// 選んだキャラ（0〜3）。LoadComplete で届く。まだなら -1。
+	CharacterID int
 
 	UDPAddr    netip.AddrPort // UdpBind が届くまでは無効
 	HasUDPSeq  bool
