@@ -235,6 +235,12 @@ func (r *Room) HandleFrame(conn Conn, frame gnet.Frame, now time.Time) {
 			return
 		}
 		r.handleEnemyAction(player, action)
+	case gnet.MsgWeaponState:
+		var state gnet.WeaponState
+		if player == nil || (r.phase != gnet.PhaseLoading && r.phase != gnet.PhaseInGame) || !r.decode(frame, &state) {
+			return
+		}
+		r.handleWeaponState(player, state)
 	case gnet.MsgLeave:
 		if player == nil {
 			return
@@ -321,10 +327,12 @@ func (r *Room) handleReconnect(conn Conn, request gnet.Reconnect, now time.Time)
 	switch r.phase {
 	case gnet.PhaseLoading:
 		sendJSON(conn, gnet.MsgLoadStage, gnet.LoadStage{StageName: r.config.StageName})
+		r.sendWeapons(conn, player)
 	case gnet.PhaseInGame:
 		sendJSON(conn, gnet.MsgGameStart, gnet.GameStart{StartTick: r.startTick})
 		sendJSON(conn, gnet.MsgBossState, gnet.BossState{TotalDamage: r.bossTotalDamage})
 		sendJSON(conn, gnet.MsgVillageState, r.villageState())
+		r.sendWeapons(conn, player)
 	case gnet.PhaseResult:
 		sendJSON(conn, gnet.MsgGameEnd, gnet.GameEnd{IsCleared: r.isCleared, Reason: r.endReason})
 	}
@@ -443,6 +451,7 @@ func (r *Room) tryBeginLoading() {
 	}
 	r.phase = gnet.PhaseLoading
 	r.bossMaxHealth = 0
+	r.clearWeapons()
 	r.logger.Info("all ready; loading", "stage", r.config.StageName)
 	for _, player := range r.players {
 		if player != nil && player.IsConnected() {

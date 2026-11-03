@@ -37,6 +37,10 @@ type Player struct {
 	State    gnet.PlayerState
 	HasState bool
 
+	// 武器（開始武器と合体に使ったフィールド武器）。WeaponState で届き、切断中も覚えておく。ロードを始めると消す。
+	Weapon    gnet.WeaponState
+	HasWeapon bool
+
 	// 自分が蘇生している相手。IsReviving のときだけ意味を持つ。
 	IsReviving      bool
 	ReviveTargetID  int

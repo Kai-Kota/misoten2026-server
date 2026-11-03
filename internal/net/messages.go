@@ -23,6 +23,8 @@ const (
 	MsgReviveStop   uint16 = 0x0402
 	MsgRevived      uint16 = 0x0403
 	MsgEnemyAction  uint16 = 0x0501
+	MsgWeaponState  uint16 = 0x0601
+	MsgWeaponNotify uint16 = 0x0602
 )
 
 // UDP のメッセージ種別（uint8）。
@@ -233,6 +235,20 @@ type EnemyAction struct {
 	ActionType int     `json:"actionType"`
 	Pos        Vector3 `json:"pos"`
 	Yaw        float32 `json:"yaw"`
+}
+
+// WeaponState は自分の武器が変わったときに送る。startingWeapon は開始武器（QR で選んだもの）、
+// pickupId は合体に使ったフィールド武器の番号（シーン内の位置の順）。まだ合体していなければ -1。
+// サーバーはプレイヤーごとに覚えておき、本人以外へ WeaponNotify として中継する。
+type WeaponState struct {
+	StartingWeapon int `json:"startingWeapon"`
+	PickupID       int `json:"pickupId"`
+}
+
+type WeaponNotify struct {
+	PlayerID       int `json:"playerId"`
+	StartingWeapon int `json:"startingWeapon"`
+	PickupID       int `json:"pickupId"`
 }
 
 type SnapshotPlayer struct {
