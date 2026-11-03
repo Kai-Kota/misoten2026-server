@@ -28,6 +28,10 @@ $rows = [Math]::Ceiling($Count / $columns)
 $width = [int]($area.Width / $columns)
 $height = [int]($area.Height / $rows)
 
+# 同じ PC で複数起動すると Player.log を取り合うので、1つずつ exe の隣の Logs/P1.log などに分ける。
+$logFolder = Join-Path (Split-Path $Exe) "Logs"
+New-Item -ItemType Directory -Force $logFolder | Out-Null
+
 $processes = @()
 for ($index = 0; $index -lt $Count; $index++) {
     $arguments = @("-name", "P$($index + 1)", "-autoReady", $Count, "-screen-fullscreen", "0",
@@ -38,6 +42,7 @@ for ($index = 0; $index -lt $Count; $index++) {
     } else {
         $arguments = if ($index -eq 0) { @("-host") + $arguments } else { @("-connect", "127.0.0.1") + $arguments }
     }
+    $arguments += @("-logFile", "`"$(Join-Path $logFolder "P$($index + 1).log")`"")
     $processes += Start-Process -FilePath $Exe -ArgumentList $arguments -PassThru
     # Host のサーバーが起動するのを待ってから残りを起動する（間に合わなくても再試行はしない）。
     Start-Sleep -Seconds $(if ($index -eq 0 -and -not $ShowTitle) { 3 } else { 1 })
