@@ -68,6 +68,8 @@ type Room struct {
 	// 敵を動かす担当の playerId（-1 は不在）と、担当から届いた最新の敵の状態。
 	enemyOwnerID int
 	enemies      []gnet.EnemySample
+	// 予約中・使用済みの合体地点（キーは pickupId）。未使用の地点は入れない。
+	stations map[int]stationState
 
 	// Discovery の goroutine から読むための値。
 	announcedPlayerCount atomic.Int32
@@ -241,6 +243,18 @@ func (r *Room) HandleFrame(conn Conn, frame gnet.Frame, now time.Time) {
 			return
 		}
 		r.handleWeaponState(player, state)
+	case gnet.MsgStationReserve:
+		var request gnet.StationRequest
+		if player == nil || r.phase != gnet.PhaseInGame || !r.decode(frame, &request) {
+			return
+		}
+		r.handleStationReserve(player, request)
+	case gnet.MsgStationRelease:
+		var request gnet.StationRequest
+		if player == nil || r.phase != gnet.PhaseInGame || !r.decode(frame, &request) {
+			return
+		}
+		r.handleStationRelease(player, request)
 	case gnet.MsgLeave:
 		if player == nil {
 			return
@@ -333,6 +347,7 @@ func (r *Room) handleReconnect(conn Conn, request gnet.Reconnect, now time.Time)
 		sendJSON(conn, gnet.MsgBossState, gnet.BossState{TotalDamage: r.bossTotalDamage})
 		sendJSON(conn, gnet.MsgVillageState, r.villageState())
 		r.sendWeapons(conn, player)
+		r.sendStations(conn)
 	case gnet.PhaseResult:
 		sendJSON(conn, gnet.MsgGameEnd, gnet.GameEnd{IsCleared: r.isCleared, Reason: r.endReason})
 	}
@@ -347,6 +362,7 @@ func (r *Room) HandleClosed(conn Conn, now time.Time) {
 	if player.Conn != nil && player.Conn.ID() == conn.ID() {
 		r.logger.Info("player disconnected", "player", player.ID)
 		player.markDisconnected(now)
+		r.releaseStationsOf(player.ID)
 		r.afterMembershipChanged(now)
 	}
 	r.updateAnnounce()
@@ -402,6 +418,7 @@ func (r *Room) Step(now time.Time) {
 			delete(r.connPlayers, player.Conn.ID())
 			player.Conn.Close()
 			player.markDisconnected(now)
+			r.releaseStationsOf(player.ID)
 			isChanged = true
 		} else if !player.IsConnected() && now.Sub(player.DisconnectedAt) > r.config.ReconnectWindow {
 			r.logger.Info("reconnect window expired", "player", player.ID)
@@ -452,6 +469,7 @@ func (r *Room) tryBeginLoading() {
 	r.phase = gnet.PhaseLoading
 	r.bossMaxHealth = 0
 	r.clearWeapons()
+	r.clearStations()
 	r.logger.Info("all ready; loading", "stage", r.config.StageName)
 	for _, player := range r.players {
 		if player != nil && player.IsConnected() {

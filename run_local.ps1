@@ -21,12 +21,13 @@ public static class LocalRunWindow {
 }
 "@
 
-# 画面の作業領域を 2x2 に分ける。
+# 画面の作業領域を 2x2 に分ける。縦長だと UI がはみ出すので、各窓は 16:9 に収める。
 $area = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
 $columns = if ($Count -eq 1) { 1 } else { 2 }
 $rows = [Math]::Ceiling($Count / $columns)
 $width = [int]($area.Width / $columns)
 $height = [int]($area.Height / $rows)
+if ($height * 16 -gt $width * 9) { $height = [int]($width * 9 / 16) } else { $width = [int]($height * 16 / 9) }
 
 # 同じ PC で複数起動すると Player.log を取り合うので、1つずつ exe の隣の Logs/P1.log などに分ける。
 $logFolder = Join-Path (Split-Path $Exe) "Logs"

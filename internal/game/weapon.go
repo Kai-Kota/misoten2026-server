@@ -19,6 +19,9 @@ func (r *Room) handleWeaponState(player *Player, state gnet.WeaponState) {
 	}
 	player.Weapon = state
 	player.HasWeapon = true
+	if state.PickupID >= 0 {
+		r.markStationUsed(player, state.PickupID)
+	}
 	r.logger.Info("weapon changed", "player", player.ID, "startingWeapon", state.StartingWeapon, "pickupId", state.PickupID)
 	notify := weaponNotify(player)
 	for _, other := range r.players {

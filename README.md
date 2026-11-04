@@ -85,7 +85,7 @@ go test ./...
 | 7779 | UDP ブロードキャスト | ServerAnnounce（1秒ごと） |
 
 - TCP フレーム: `uint32 length | uint16 msgType | payload`（リトルエンディアン、length は msgType + payload、上限64KB）
-- UDP ヘッダ（12バイト、リトルエンディアン）: `uint16 magic(0xB055) | uint8 version(4) | uint8 msgType | uint8 playerId(サーバー発は0xFF) | uint8 reserved | uint16 seq | uint32 token`
+- UDP ヘッダ（12バイト、リトルエンディアン）: `uint16 magic(0xB055) | uint8 version(8) | uint8 msgType | uint8 playerId(サーバー発は0xFF) | uint8 reserved | uint16 seq | uint32 token`
   - 1パケット1200バイト以下、再送なし、seq が古いものは捨てる
   - サーバー発のパケットの token は受け取るプレイヤーの udpToken
 - payload は UTF-8 の JSON。キー名は `internal/net/messages.go` と Unity の `NetworkMessages.cs` で一致させる。
@@ -114,7 +114,12 @@ go test ./...
 | 0x0401 | ReviveStart | C→S | `{targetId}` 倒れている味方へのインタラクトを押し始めた |
 | 0x0402 | ReviveStop | C→S | `{}` インタラクトを離した |
 | 0x0403 | Revived | S→C | `{reviverId, targetId}` 蘇生が成立した。全員に送り、targetId 本人のクライアントが HP を戻す |
-| 0x0501 | EnemyAction | 双方 | `{enemyId, actionType, pos, yaw}` 担当のクライアントで敵が攻撃などを始めた。サーバーは担当以外の全員へ中継する。担当以外から届いたものは捨てる |
+| 0x0501 | EnemyAction | 双方 | `{enemyId, actionType, pos, yaw, targetIds}` 担当のクライアントで敵が攻撃などを始めた。サーバーは担当以外の全員へ中継する。担当以外から届いたものは捨てる。targetIds は竜巻・爆発が狙った相手の playerId（番号のない相手は -1） |
+| 0x0601 | WeaponState | C→S | `{startingWeapon, pickupId}` 自分の武器が変わった。pickupId は合体に使ったフィールド武器の番号（シーン内の位置の順、未合体は -1）。ロード中から受け付ける |
+| 0x0602 | WeaponNotify | S→C | `{playerId, startingWeapon, pickupId}` 本人以外へ中継。再接続時は全員分を送り直す |
+| 0x0603 | StationReserve | C→S | `{pickupId}` 合体地点で合体を始めた。先に頼んだ1人だけが予約できる。1人が予約できるのは1か所 |
+| 0x0604 | StationRelease | C→S | `{pickupId}` 合体をやめた。自分の予約だけを外す（使用済みは戻らない） |
+| 0x0605 | StationState | S→C | `{pickupId, state, playerId}` state: 0=未使用 1=予約中 2=使用済み。変化時は全員へ、予約を断ったときは頼んだ人にだけ今の状態を送る。合体（WeaponState の pickupId）で使用済み、切断で予約を外す。再接続時は予約中・使用済みを送り直す |
 
 ### UDP
 

@@ -25,6 +25,10 @@ const (
 	MsgEnemyAction  uint16 = 0x0501
 	MsgWeaponState  uint16 = 0x0601
 	MsgWeaponNotify uint16 = 0x0602
+	// 合体地点（フィールド武器）の予約。番号は WeaponState の pickupId と同じ。
+	MsgStationReserve uint16 = 0x0603
+	MsgStationRelease uint16 = 0x0604
+	MsgStationState   uint16 = 0x0605
 )
 
 // UDP のメッセージ種別（uint8）。
@@ -251,6 +255,26 @@ type WeaponNotify struct {
 	PlayerID       int `json:"playerId"`
 	StartingWeapon int `json:"startingWeapon"`
 	PickupID       int `json:"pickupId"`
+}
+
+// 合体地点の状態（StationState.State）。
+const (
+	StationFree     = 0
+	StationReserved = 1
+	StationUsed     = 2
+)
+
+// StationRequest は合体を始めるとき（StationReserve）とやめたとき（StationRelease）に送る。
+type StationRequest struct {
+	PickupID int `json:"pickupId"`
+}
+
+// StationState は合体地点の状態が変わったときに全員へ送る。予約を断ったときは、断った相手にだけ今の状態を送る。
+// playerId は予約した人・使った人（未使用なら -1）。
+type StationState struct {
+	PickupID int `json:"pickupId"`
+	State    int `json:"state"`
+	PlayerID int `json:"playerId"`
 }
 
 type SnapshotPlayer struct {
