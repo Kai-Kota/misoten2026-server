@@ -230,11 +230,13 @@ type EnemySnapshot struct {
 
 // EnemyAction は担当のクライアントで敵が攻撃などの行動を始めたときに送る。
 // サーバーは担当以外の全員へ中継し、受け取ったクライアントは同じ位置・向きから同じ行動を再生する。
+// TargetIDs は狙う相手を選ぶ攻撃が選んだ相手の playerId（番号のない相手は -1）。サーバーは中身を見ずに中継する。
 type EnemyAction struct {
 	EnemyID    int     `json:"enemyId"`
 	ActionType int     `json:"actionType"`
 	Pos        Vector3 `json:"pos"`
 	Yaw        float32 `json:"yaw"`
+	TargetIDs  []int   `json:"targetIds"`
 }
 
 // WeaponState は自分の武器が変わったときに送る。startingWeapon は開始武器（QR で選んだもの）、

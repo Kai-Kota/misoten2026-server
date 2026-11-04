@@ -63,6 +63,16 @@ func TestEnemyActionIsRelayedFromOwnerOnly(t *testing.T) {
 	}
 }
 
+func TestEnemyActionKeepsTargetIDs(t *testing.T) {
+	f := newFixture(t)
+	first, _, second, _ := startGame(f)
+	f.send(first, gnet.MsgEnemyAction, gnet.EnemyAction{EnemyID: 0, ActionType: 4, TargetIDs: []int{1, 0, -1}})
+	var relayed gnet.EnemyAction
+	if !second.last(t, gnet.MsgEnemyAction, &relayed) || len(relayed.TargetIDs) != 3 || relayed.TargetIDs[0] != 1 || relayed.TargetIDs[2] != -1 {
+		t.Fatalf("relayed = %+v", relayed)
+	}
+}
+
 func TestEnemyOwnerMovesWhenOwnerDisconnects(t *testing.T) {
 	f := newFixture(t)
 	first, _, _, b := startGame(f)
