@@ -4,10 +4,12 @@
 #   ./run_local.ps1 -Count 2
 #   ./run_local.ps1 -Exe ../misoten2026/Builds/KaiNetworkTest/KaiNetworkTest.exe
 #   ./run_local.ps1 -Count 2 -ShowTitle             -> 自動で入室せず、タイトルから操作する（部屋を立てる／参加するを手で試す）
+#   ./run_local.ps1 -Count 1 -Fullscreen            -> 1人で全画面（枠なし）。P1 だけ全画面になり、ほかは窓のまま
 param(
     [string]$Exe = (Join-Path $PSScriptRoot "../misoten2026/Builds/PrototypeOnline/PrototypeOnline.exe"),
     [ValidateRange(1, 4)][int]$Count = 4,
-    [switch]$ShowTitle
+    [switch]$ShowTitle,
+    [switch]$Fullscreen
 )
 $ErrorActionPreference = "Stop"
 
@@ -35,12 +37,14 @@ New-Item -ItemType Directory -Force $logFolder | Out-Null
 
 $processes = @()
 for ($index = 0; $index -lt $Count; $index++) {
-    $arguments = @("-name", "P$($index + 1)", "-autoReady", $Count, "-screen-fullscreen", "0",
-        "-screen-width", $width, "-screen-height", $height)
+    # Fullscreen のときは P1 だけ、画面いっぱいの枠なし全画面にする。
+    $screenArguments = if ($Fullscreen -and $index -eq 0) { @("-screen-fullscreen", "1", "-window-mode", "borderless") }
+        else { @("-screen-fullscreen", "0", "-screen-width", $width, "-screen-height", $height) }
     if ($ShowTitle) {
         # タイトルから始める。名前はタイトルで入れ直せる。
-        $arguments = @("-screen-fullscreen", "0", "-screen-width", $width, "-screen-height", $height)
+        $arguments = $screenArguments
     } else {
+        $arguments = @("-name", "P$($index + 1)", "-autoReady", $Count) + $screenArguments
         $arguments = if ($index -eq 0) { @("-host") + $arguments } else { @("-connect", "127.0.0.1") + $arguments }
     }
     $arguments += @("-logFile", "`"$(Join-Path $logFolder "P$($index + 1).log")`"")
@@ -51,6 +55,9 @@ for ($index = 0; $index -lt $Count; $index++) {
 
 for ($index = 0; $index -lt $processes.Count; $index++) {
     $process = $processes[$index]
+    if ($Fullscreen -and $index -eq 0) {
+        continue
+    }
     for ($wait = 0; $wait -lt 50 -and $process.MainWindowHandle -eq [IntPtr]::Zero; $wait++) {
         Start-Sleep -Milliseconds 200
         $process.Refresh()
