@@ -112,3 +112,22 @@ func TestVillageResentOnReconnectAndResetOnNextGame(t *testing.T) {
 		t.Fatalf("health = %d on the next game", state.Health)
 	}
 }
+
+func TestDisabledVillageNeverDecreasesOrEndsGame(t *testing.T) {
+	f := newVillageFixture(t, 30, 10, time.Second)
+	f.room.config.DisableVillage = true
+	first, _, _, _ := startGame(f)
+	f.advance(startDelay + 10*time.Second)
+	if f.room.villageHealth != 30 {
+		t.Fatalf("health = %d, want it to stay full", f.room.villageHealth)
+	}
+	if state := villageState(t, first); state.Health != 30 {
+		t.Fatalf("state = %+v, want full", state)
+	}
+	// 村の HP が 0 になっていても、村が理由では終わらない。
+	f.room.villageHealth = 0
+	f.room.checkGameEnd()
+	if f.room.phase != gnet.PhaseInGame || countSent(first, gnet.MsgGameEnd) != 0 {
+		t.Fatal("the game ended because of the disabled village")
+	}
+}

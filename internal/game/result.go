@@ -13,7 +13,7 @@ func (r *Room) checkGameEnd() {
 		r.endGame(true, gnet.EndBossDefeated)
 	case r.isEveryoneDead():
 		r.endGame(false, gnet.EndEveryoneDead)
-	case r.villageHealth <= 0:
+	case !r.config.DisableVillage && r.villageHealth <= 0:
 		r.endGame(false, gnet.EndVillageDestroyed)
 	}
 }

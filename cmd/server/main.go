@@ -34,11 +34,13 @@ type Config struct {
 	ReviveTimeMs       int     `json:"reviveTimeMs"`
 	ReviveRadius       float32 `json:"reviveRadius"`
 	// 村の HP は、ゲーム開始から villageDamageIntervalMs ごとに villageDamage ずつ減る。
-	VillageMaxHealth        int    `json:"villageMaxHealth"`
-	VillageDamage           int    `json:"villageDamage"`
-	VillageDamageIntervalMs int    `json:"villageDamageIntervalMs"`
-	LogDir                  string `json:"logDir"`
-	LogLevel                string `json:"logLevel"`
+	VillageMaxHealth        int `json:"villageMaxHealth"`
+	VillageDamage           int `json:"villageDamage"`
+	VillageDamageIntervalMs int `json:"villageDamageIntervalMs"`
+	// true なら村の HP を減らさず、村が理由のゲームオーバーにもしない。
+	DisableVillage bool   `json:"disableVillage"`
+	LogDir         string `json:"logDir"`
+	LogLevel       string `json:"logLevel"`
 }
 
 func defaultConfig() Config {
@@ -116,6 +118,7 @@ func run(configPath string, parentPID int) error {
 		VillageMaxHealth:      config.VillageMaxHealth,
 		VillageDamage:         config.VillageDamage,
 		VillageDamageInterval: time.Duration(config.VillageDamageIntervalMs) * time.Millisecond,
+		DisableVillage:        config.DisableVillage,
 	}, udpServer, logger, time.Now())
 
 	tcpEvents := make(chan gnet.TCPEvent, 256)

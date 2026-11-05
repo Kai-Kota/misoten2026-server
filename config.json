@@ -15,6 +15,7 @@
   "villageMaxHealth": 100,
   "villageDamage": 1,
   "villageDamageIntervalMs": 1000,
+  "disableVillage": true,
   "logDir": "logs",
   "logLevel": "info"
 }

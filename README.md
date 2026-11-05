@@ -141,6 +141,7 @@ go test ./...
 - 他プレイヤーの弾は表示専用（ダメージ0）。ダメージは撃った本人のクライアントで判定する
 - 蘇生はサーバーが判定する。ReviveStart を受けたら、蘇生する側が生きていて、相手の `flags` が死亡で、2人の `pos` の距離が `reviveRadius`（既定3m）以内なら開始する。tick ごとに同じ条件を確かめ、外れたら中断する。`reviveTimeMs`（既定3000）たったら Revived を送る。本人から生きている状態が届くまでは、同じ相手を重ねて蘇生しない
 - 村の HP はサーバーが持つ。startTick から `villageDamageIntervalMs`（既定1000）ごとに `villageDamage`（既定1）ずつ、`villageMaxHealth`（既定100）から減らす。経過時間から求めるので tick が遅れてもずれない
+- `disableVillage` が true なら村の HP は減らず、村が理由のゲームオーバーにもならない（α の config.json は true）
 
 ### 流れ
 

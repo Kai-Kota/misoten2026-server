@@ -39,6 +39,8 @@ type RoomConfig struct {
 	VillageMaxHealth      int
 	VillageDamage         int
 	VillageDamageInterval time.Duration
+	// true なら村の HP を減らさず、村が理由のゲームオーバーにもしない（α では村を使わない）。
+	DisableVillage bool
 }
 
 // UDPSender は UDP の送信先。テストで差し替えられるよう interface にしている。

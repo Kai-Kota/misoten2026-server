@@ -15,7 +15,11 @@ const (
 
 // updateVillage は startTick からの経過時間で村の HP を決め、変わったら全員に VillageState を送る。
 // 経過時間から求めるので、tick が遅れても減る量はずれない。
+// DisableVillage のときは最大値のまま変えない。
 func (r *Room) updateVillage(now time.Time) {
+	if r.config.DisableVillage {
+		return
+	}
 	elapsed := now.Sub(r.startTime) - time.Duration(r.startTick)*time.Second/time.Duration(r.config.TickRate)
 	if elapsed < 0 {
 		return
